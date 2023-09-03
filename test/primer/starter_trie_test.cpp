@@ -34,7 +34,7 @@ std::vector<std::string> GenerateNRandomString(int n) {
   for (auto &rand_str : rand_strs) {
     int str_len = len_dist(gen);
     for (int i = 0; i < str_len; ++i) {
-      rand_str.push_back((char)char_dist(gen));
+      rand_str.push_back(static_cast<char>(char_dist(gen)));
     }
   }
 
