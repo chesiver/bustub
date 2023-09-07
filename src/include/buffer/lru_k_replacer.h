@@ -12,12 +12,12 @@
 
 #pragma once
 
+#include <deque>
 #include <limits>
 #include <list>
 #include <mutex>  // NOLINT
 #include <unordered_map>
 #include <vector>
-#include <deque>
 
 #include "common/config.h"
 #include "common/macros.h"
