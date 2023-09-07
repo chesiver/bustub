@@ -110,7 +110,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
    */
   class Bucket {
    public:
-    explicit Bucket(size_t size, int depth = 0);
+    explicit Bucket(size_t size, int depth = 0, int bucket_index = 0);
 
     /** @brief Check if a bucket is full. */
     inline auto IsFull() const -> bool { return list_.size() == size_; }
@@ -122,6 +122,8 @@ class ExtendibleHashTable : public HashTable<K, V> {
     inline void IncrementDepth() { depth_++; }
 
     inline auto GetItems() -> std::list<std::pair<K, V>> & { return list_; }
+
+    inline auto GetIndex() const -> int { return bucket_index_; }
 
     /**
      *
@@ -162,6 +164,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
     size_t size_;
     int depth_;
     std::list<std::pair<K, V>> list_;
+    int bucket_index_;
   };
 
  private:
@@ -180,7 +183,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
    * @brief Redistribute the kv pairs in a full bucket.
    * @param bucket The bucket to be redistributed.
    */
-  auto RedistributeBucket(int bucket_idx) -> void;
+  auto RedistributeBucket(std::shared_ptr<Bucket> bucket) -> void;
 
   /*****************************************************************
    * Must acquire latch_ first before calling the below functions. *
