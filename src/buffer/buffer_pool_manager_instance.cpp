@@ -53,7 +53,7 @@ auto BufferPoolManagerInstance::GetFreePageAndFlushIfDirty() -> frame_id_t {
   }
   // Flush if frame is dirty. Reset metadata.
   if (pages_[frame_id].IsDirty()) {
-    disk_manager_->WritePage(pages_[frame_id].GetPageId(), pages_[frame_id].GetData());
+    disk_manager_->WritePage(pages_[frame_id].page_id_, pages_[frame_id].data_);
   }
   page_table_->Remove(pages_[frame_id].page_id_);
   pages_[frame_id].ResetMemory();
@@ -96,6 +96,7 @@ auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
     LOG_DEBUG("Found page id: %d - frame id - %d", page_id, frame_id);
     Page *page = pages_ + frame_id;
     page->pin_count_ += 1;
+    replacer_->SetEvictable(frame_id, false);
     replacer_->RecordAccess(frame_id);
     latch_.unlock();
     return page;
@@ -126,7 +127,7 @@ auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
 auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> bool {
   latch_.lock();
   BUSTUB_ASSERT(page_id != INVALID_PAGE_ID, "cannot be invalid page id");
-  LOG_DEBUG("Start page id: %d", page_id);
+  LOG_DEBUG("Start page id: %d - is dirty: %d", page_id, is_dirty);
   frame_id_t frame_id;
   if (!page_table_->Find(page_id, frame_id)) {
     LOG_DEBUG("Cannot find frame id for page id: %d", page_id);
@@ -143,8 +144,10 @@ auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> 
     LOG_DEBUG("Evictable for page id: %d - frame id - %d", page_id, frame_id);
     replacer_->SetEvictable(frame_id, true);
   }
-  pages_[frame_id].is_dirty_ = is_dirty;
-  LOG_DEBUG("End page id: %d", page_id);
+  if (is_dirty) {
+    pages_[frame_id].is_dirty_ = is_dirty;
+  }
+  LOG_DEBUG("End page id: %d - is_dirty: %d", page_id, is_dirty);
   latch_.unlock();
   return true;
 }
@@ -159,14 +162,11 @@ auto BufferPoolManagerInstance::FlushPgImp(page_id_t page_id) -> bool {
     latch_.unlock();
     return false;
   }
-  disk_manager_->WritePage(pages_[frame_id].GetPageId(), pages_[frame_id].GetData());
+  disk_manager_->WritePage(pages_[frame_id].page_id_, pages_[frame_id].data_);
   pages_[frame_id].is_dirty_ = false;
-  // Remove page id to frame id mapping
-  page_table_->Remove(pages_[frame_id].page_id_);
-  pages_[frame_id].page_id_ = INVALID_PAGE_ID;
-  LOG_DEBUG("Ens page id: %d - frame id: %d", page_id, frame_id);
+  LOG_DEBUG("End page id: %d - frame id: %d", page_id, frame_id);
   latch_.unlock();
-  return false;
+  return true;
 }
 
 void BufferPoolManagerInstance::FlushAllPgsImp() {
