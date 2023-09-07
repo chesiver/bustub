@@ -106,10 +106,6 @@ void ExtendibleHashTable<K, V>::Insert(const K &key, const V &value) {
 template <typename K, typename V>
 void ExtendibleHashTable<K, V>::RedistributeBucket(std::shared_ptr<Bucket> bucket) {
   int bucket_idx = bucket->GetIndex();
-  for (int i = 0; i < (1 << global_depth_) - 1; i += 1) {
-    LOG_DEBUG("Test !!!!!! - %d", dir_[i]->GetIndex() == i);
-  }
-
   LOG_DEBUG("RedistributeBucket for index - %d", bucket_idx);
   int local_depth = bucket->GetDepth();
   // increase depth if necessary

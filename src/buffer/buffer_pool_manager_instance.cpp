@@ -51,41 +51,36 @@ auto BufferPoolManagerInstance::GetFreePageAndFlushIfDirty() -> frame_id_t {
       return -1;
     }
   }
-  // Create page object if necessary
-  Page *page = pages_ + frame_id;
-  if (page == nullptr) {
-    page = new Page();
-  }
   // Flush if frame is dirty. Reset metadata.
   if (pages_[frame_id].IsDirty()) {
     disk_manager_->WritePage(pages_[frame_id].GetPageId(), pages_[frame_id].GetData());
-    pages_[frame_id].ResetMemory();
-    pages_[frame_id].is_dirty_ = false;
-    pages_[frame_id].pin_count_ = 0;
-    // Remove page id to frame id mapping
-    page_table_->Remove(pages_[frame_id].page_id_);
-    pages_[frame_id].page_id_ = INVALID_PAGE_ID;
   }
+  page_table_->Remove(pages_[frame_id].page_id_);
+  pages_[frame_id].ResetMemory();
+  pages_[frame_id].is_dirty_ = false;
+  pages_[frame_id].pin_count_ = 0;
+  pages_[frame_id].page_id_ = INVALID_PAGE_ID;
   return frame_id;
 }
 
 auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
   latch_.lock();
   LOG_DEBUG("Start");
-  // Try get free frame
+  // Try get free frame with metadata reset
   frame_id_t frame_id = GetFreePageAndFlushIfDirty();
   if (frame_id == -1) {
+    LOG_DEBUG("No free frame available");
     latch_.unlock();
     return nullptr;
   }
   pages_[frame_id].page_id_ = *page_id = AllocatePage();
-  pages_[frame_id].pin_count_ = 1;
   // Pin frame && Add access count
+  pages_[frame_id].pin_count_ = 1;
   replacer_->SetEvictable(frame_id, false);
   replacer_->RecordAccess(frame_id);
   // Map page id to frame id
   page_table_->Insert(*page_id, frame_id);
-  Page *page = &pages_[frame_id];
+  Page *page = pages_ + frame_id;
   LOG_DEBUG("End page id: %d - frame id: %d", *page_id, frame_id);
   latch_.unlock();
   return page;
@@ -93,12 +88,15 @@ auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
 
 auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
   latch_.lock();
-  LOG_DEBUG("Start page id: %d", page_id);
+  LOG_DEBUG("Start fetch page id: %d", page_id);
+  BUSTUB_ASSERT(page_id != INVALID_PAGE_ID, "cannot be invalid page id");
   // First search for page_id in the buffer pool
   frame_id_t frame_id;
   if (page_table_->Find(page_id, frame_id)) {
     LOG_DEBUG("Found page id: %d - frame id - %d", page_id, frame_id);
     Page *page = pages_ + frame_id;
+    page->pin_count_ += 1;
+    replacer_->RecordAccess(frame_id);
     latch_.unlock();
     return page;
   }
@@ -106,43 +104,43 @@ auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
   LOG_DEBUG("Not found page id: %d", page_id);
   frame_id = GetFreePageAndFlushIfDirty();
   if (frame_id == -1) {
+    LOG_DEBUG("No free frame available");
     latch_.unlock();
     return nullptr;
   }
   // Read page from disk
   disk_manager_->ReadPage(page_id, pages_[frame_id].data_);
   pages_[frame_id].page_id_ = page_id;
-  pages_[frame_id].pin_count_ = 1;
   pages_[frame_id].is_dirty_ = false;
-  // Pin frame. Add access count
+  pages_[frame_id].pin_count_ = 1;
   replacer_->SetEvictable(frame_id, false);
   replacer_->RecordAccess(frame_id);
   // Map page id to frame id
   page_table_->Insert(page_id, frame_id);
-  Page *page = &pages_[frame_id];
-  LOG_DEBUG("Ens page id: %d - frame id: %d", page_id, frame_id);
+  Page *page = pages_ + frame_id;
+  LOG_DEBUG("End page id: %d - frame id: %d", page_id, frame_id);
   latch_.unlock();
   return page;
 }
 
 auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> bool {
   latch_.lock();
-  LOG_DEBUG("Start page id: %d", page_id);
   BUSTUB_ASSERT(page_id != INVALID_PAGE_ID, "cannot be invalid page id");
+  LOG_DEBUG("Start page id: %d", page_id);
   frame_id_t frame_id;
   if (!page_table_->Find(page_id, frame_id)) {
-    latch_.unlock();
     LOG_DEBUG("Cannot find frame id for page id: %d", page_id);
+    latch_.unlock();
     return false;
   }
   if (pages_[frame_id].GetPinCount() <= 0) {
-    latch_.unlock();
     LOG_DEBUG("Pin count is already 0 for page id: %d", page_id);
+    latch_.unlock();
     return false;
   }
   pages_[frame_id].pin_count_ -= 1;
   if (pages_[frame_id].GetPinCount() == 0) {
-    LOG_DEBUG("Remove for page id: %d - frame id - %d", page_id, frame_id);
+    LOG_DEBUG("Evictable for page id: %d - frame id - %d", page_id, frame_id);
     replacer_->SetEvictable(frame_id, true);
   }
   pages_[frame_id].is_dirty_ = is_dirty;
@@ -153,17 +151,16 @@ auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> 
 
 auto BufferPoolManagerInstance::FlushPgImp(page_id_t page_id) -> bool {
   latch_.lock();
-  LOG_DEBUG("Start page id: %d", page_id);
   BUSTUB_ASSERT(page_id != INVALID_PAGE_ID, "cannot be invalid page id");
+  LOG_DEBUG("Start page id: %d", page_id);
   frame_id_t frame_id;
   if (!page_table_->Find(page_id, frame_id)) {
+    LOG_DEBUG("Cannot find frame id for page id: %d", page_id);
     latch_.unlock();
     return false;
   }
   disk_manager_->WritePage(pages_[frame_id].GetPageId(), pages_[frame_id].GetData());
-  pages_[frame_id].ResetMemory();
   pages_[frame_id].is_dirty_ = false;
-  pages_[frame_id].pin_count_ = 0;
   // Remove page id to frame id mapping
   page_table_->Remove(pages_[frame_id].page_id_);
   pages_[frame_id].page_id_ = INVALID_PAGE_ID;
@@ -188,16 +185,18 @@ void BufferPoolManagerInstance::FlushAllPgsImp() {
 
 auto BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) -> bool {
   latch_.lock();
-  LOG_DEBUG("Start page id: %d", page_id);
   BUSTUB_ASSERT(page_id != INVALID_PAGE_ID, "cannot be invalid page id");
+  LOG_DEBUG("Start page id: %d", page_id);
   frame_id_t frame_id;
   // If page_id is not in the buffer pool, do nothing and return true
   if (!page_table_->Find(page_id, frame_id)) {
+    LOG_DEBUG("Cannot find frame id for page id: %d", page_id);
     latch_.unlock();
     return true;
   }
   // Pinned. Cannot be deleted
   if (pages_[frame_id].GetPinCount() > 0) {
+    LOG_DEBUG("Page is pinned - page id: %d - frame_id: %d", page_id, frame_id);
     latch_.unlock();
     return false;
   }
