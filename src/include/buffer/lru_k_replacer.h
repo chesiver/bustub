@@ -143,6 +143,8 @@ class LRUKReplacer {
   std::mutex latch_;
   std::vector<std::deque<size_t>> access_records_;
   std::vector<bool> evictable_frames_;
+
+  void RemoveInternal(frame_id_t frame_id);
 };
 
 }  // namespace bustub
