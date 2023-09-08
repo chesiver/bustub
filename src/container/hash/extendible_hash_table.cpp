@@ -88,25 +88,25 @@ auto ExtendibleHashTable<K, V>::Remove(const K &key) -> bool {
 template <typename K, typename V>
 void ExtendibleHashTable<K, V>::Insert(const K &key, const V &value) {
   latch_.lock();
-  LOG_DEBUG("Insert Start");
+
   int idx;
   while (true) {
     idx = IndexOf(key);
-    LOG_DEBUG("Try insert with idx: %d", idx);
+
     if (!dir_[idx]->IsFull()) {
       break;
     }
     RedistributeBucket(dir_[idx]);
   }
   dir_[idx]->Insert(key, value);
-  LOG_DEBUG("Insert End");
+
   latch_.unlock();
 }
 
 template <typename K, typename V>
 void ExtendibleHashTable<K, V>::RedistributeBucket(std::shared_ptr<Bucket> bucket) {
   int bucket_idx = bucket->GetIndex();
-  LOG_DEBUG("RedistributeBucket for index - %d", bucket_idx);
+
   int local_depth = bucket->GetDepth();
   // increase depth if necessary
   if (local_depth == global_depth_) {
@@ -142,9 +142,6 @@ void ExtendibleHashTable<K, V>::RedistributeBucket(std::shared_ptr<Bucket> bucke
       }
     }
   }
-  LOG_DEBUG("After RedistributeBucket for index: %d - size: %d - %d %d - %d %d", bucket_idx,
-            static_cast<int>(bucket->GetItems().size()), sub_index1, sub_index2,
-            static_cast<int>(split_bucket_0->GetItems().size()), static_cast<int>(split_bucket_1->GetItems().size()));
   // final
   num_buckets_ += 1;
 }
