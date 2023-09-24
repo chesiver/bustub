@@ -90,7 +90,7 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  *****************************************************************************/
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::insertOnLeaf(B_PLUS_TREE_LEAF_PAGE_TYPE *leaf, const KeyType &key, const ValueType &value) {
-  LOG_DEBUG("Start %lld", key.ToString());
+  LOG_DEBUG("Start %ld", key.ToString());
   std::pair<KeyType, ValueType> *entries = leaf->GetMappingType();
   int size = leaf->GetSize();
   int p = 0, q = size;
@@ -111,10 +111,10 @@ void BPLUSTREE_TYPE::insertOnLeaf(B_PLUS_TREE_LEAF_PAGE_TYPE *leaf, const KeyTyp
 
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::insertOnParent(BPlusTreePage *left, const KeyType &key, BPlusTreePage *right) {
-  LOG_DEBUG("Start %lld", key.ToString());
+  LOG_DEBUG("Start %ld", key.ToString());
   // Is Root
   if (left->GetPageId() == root_page_id_) {
-    LOG_DEBUG("Create Root Page: %d - %lld - %d", left->GetPageId(), key.ToString(), right->GetPageId());
+    LOG_DEBUG("Create Root Page: %d - %ld - %d", left->GetPageId(), key.ToString(), right->GetPageId());
     // Create root page
     page_id_t new_root_page_id;
     Page *root_page = buffer_pool_manager_->NewPage(&new_root_page_id);
@@ -136,7 +136,7 @@ void BPLUSTREE_TYPE::insertOnParent(BPlusTreePage *left, const KeyType &key, BPl
   int size = parent->GetSize();
   if (size < parent->GetMaxSize()) {
     // Insert directly
-    LOG_DEBUG("Insert Directly: %lld", key.ToString());
+    LOG_DEBUG("Insert Directly: %ld", key.ToString());
     int i = size;
     while (i >= 0 && comparator_(entries[i - 1].first, key) > 0) {
       entries[i] = entries[i - 1];
@@ -146,7 +146,7 @@ void BPLUSTREE_TYPE::insertOnParent(BPlusTreePage *left, const KeyType &key, BPl
     parent->IncreaseSize(1);
   } else {
     // Split
-    LOG_DEBUG("Split: %lld", key.ToString());
+    LOG_DEBUG("Split: %ld", key.ToString());
     std::vector<std::pair<KeyType, page_id_t>> tmp(size + 1);
     int i = 0;
     while (i == 0 || (i < size && comparator_(entries[i].first, key) < 0)) {
@@ -159,7 +159,7 @@ void BPLUSTREE_TYPE::insertOnParent(BPlusTreePage *left, const KeyType &key, BPl
       i += 1;
     }
     for (int i = 0; i < size + 1; i += 1) {
-      LOG_DEBUG("tmp: %lld", tmp[i].first.ToString());
+      LOG_DEBUG("tmp: %ld", tmp[i].first.ToString());
     }
     // left
     int half = (size + 1 + 1) / 2;
@@ -197,7 +197,7 @@ void BPLUSTREE_TYPE::insertOnParent(BPlusTreePage *left, const KeyType &key, BPl
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool {
-  LOG_DEBUG("Enter: %lld", key.ToString());
+  LOG_DEBUG("Enter: %ld", key.ToString());
   // Search leaf
   LeafPage *cur_tree_page;
   if (IsEmpty()) {
@@ -208,20 +208,20 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     cur_tree_page = downToLeaf(key, transaction);
   }
   // Check duplicate
-  LOG_DEBUG("Check Duplicate %lld", key.ToString());
+  LOG_DEBUG("Check Duplicate %ld", key.ToString());
   std::vector<ValueType> tmp;
   if (searchInLeaf(cur_tree_page, key, &tmp, transaction)) {
     return false;
   }
   // Insert
-  LOG_DEBUG("Insert: %lld", key.ToString());
+  LOG_DEBUG("Insert: %ld", key.ToString());
   int size = cur_tree_page->GetSize();
   std::pair<KeyType, ValueType> *entries = cur_tree_page->GetMappingType();
   if (size < cur_tree_page->GetMaxSize()) {
     insertOnLeaf(cur_tree_page, key, value);
   } else {
     // Split
-    LOG_DEBUG("Split: %lld", key.ToString());
+    LOG_DEBUG("Split: %ld", key.ToString());
     std::vector<std::pair<KeyType, ValueType>> tmp(size + 1);
     int i = 0;
     while (i < size && comparator_(entries[i].first, key) < 0) {
@@ -297,7 +297,7 @@ std::tuple<int, int, bool, KeyType> findSibling(int size, MappingType *parentEnt
 
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::removeLeafEntry(LeafPage *cur, const KeyType &key, Transaction *transaction) {
-  LOG_DEBUG("Page id: %d - key: %lld", cur->GetPageId(), key.ToString());
+  LOG_DEBUG("Page id: %d - key: %ld", cur->GetPageId(), key.ToString());
   // Delete in current node
   bool removed = removeEntryLocally(cur->GetSize(), cur->GetMappingType(), key, comparator_);
   if (!removed) {
@@ -313,12 +313,12 @@ void BPLUSTREE_TYPE::removeLeafEntry(LeafPage *cur, const KeyType &key, Transact
     // Find previous / next child
     InternalPage *parent =
         reinterpret_cast<InternalPage *>(buffer_pool_manager_->FetchPage(cur->GetParentPageId())->GetData());
-    LOG_DEBUG("Parent page id: %d - key: %lld", parent->GetPageId(), key.ToString());
+    LOG_DEBUG("Parent page id: %d - key: %ld", parent->GetPageId(), key.ToString());
     auto [curIndexInParent, siblingIdxInParent, isPredecessor, splitKey] =
         findSibling<KeyType, page_id_t, KeyComparator>(parent->GetSize(), parent->GetMappingType(), cur->GetPageId());
     int siblingPageId = parent->GetMappingType()[siblingIdxInParent].second;
     LeafPage *sibling = reinterpret_cast<LeafPage *>(buffer_pool_manager_->FetchPage(siblingPageId)->GetData());
-    LOG_DEBUG("Sibling page id: %d - key: %lld", sibling->GetPageId(), key.ToString());
+    LOG_DEBUG("Sibling page id: %d - key: %ld", sibling->GetPageId(), key.ToString());
     // If fit in same tree page
     if (cur->GetSize() + sibling->GetSize() <= cur->GetMaxSize()) {
       // Swap if sibling is after parent
@@ -326,7 +326,7 @@ void BPLUSTREE_TYPE::removeLeafEntry(LeafPage *cur, const KeyType &key, Transact
         std::swap(siblingIdxInParent, curIndexInParent);
         std::swap(sibling, cur);
       }
-      LOG_DEBUG("Sibling page id: %d - key: %lld", sibling->GetPageId(), key.ToString());
+      LOG_DEBUG("Sibling page id: %d - key: %ld", sibling->GetPageId(), key.ToString());
       // Merge
       for (int i = 0; i < cur->GetSize(); i += 1) {
         sibling->GetMappingType()[sibling->GetSize() + i] = cur->GetMappingType()[i];
@@ -457,7 +457,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
   if (IsEmpty()) {
     return;
   }
-  LOG_DEBUG("Start: %lld", key.ToString());
+  LOG_DEBUG("Start: %ld", key.ToString());
   LeafPage *cur = downToLeaf(key, transaction);
   removeLeafEntry(cur, key, transaction);
 }
