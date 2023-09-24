@@ -68,8 +68,8 @@ class BPlusTreePage {
   lsn_t lsn_ __attribute__((__unused__));
   int size_ __attribute__((__unused__));
   int max_size_ __attribute__((__unused__));
-  page_id_t parent_page_id_ __attribute__((__unused__));
-  page_id_t page_id_ __attribute__((__unused__));
+  page_id_t parent_page_id_ = INVALID_PAGE_ID;
+  page_id_t page_id_ = INVALID_PAGE_ID;
 };
 
 }  // namespace bustub
