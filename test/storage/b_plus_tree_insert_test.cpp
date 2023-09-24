@@ -259,7 +259,7 @@ TEST(BPlusTreeTests, BasicDeleteTest) {
     index_key.SetFromInteger(key);
     tree.Insert(index_key, rid, transaction);
   }
-  
+
   std::vector<int64_t> remove_keys = {1, 5};
   for (auto key : remove_keys) {
     index_key.SetFromInteger(key);

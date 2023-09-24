@@ -56,8 +56,9 @@ class BPlusTree {
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
 
   // return the value associated with a given key
-  auto downToLeaf(const KeyType &key, Transaction *transaction) -> LeafPage*;
-  auto searchInLeaf(LeafPage *leaf, const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) -> bool;
+  auto downToLeaf(const KeyType &key, Transaction *transaction) -> LeafPage *;
+  auto searchInLeaf(LeafPage *leaf, const KeyType &key, std::vector<ValueType> *result, Transaction *transaction)
+      -> bool;
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
 
   // return the page id of the root node

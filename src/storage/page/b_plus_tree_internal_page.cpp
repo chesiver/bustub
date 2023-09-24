@@ -40,13 +40,13 @@ INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::KeyAt(int index) const -> KeyType {
   // replace with your own code
   BUSTUB_ASSERT(index < GetSize(), "index out of range !");
-  return array_[index].first; 
+  return array_[index].first;
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_INTERNAL_PAGE_TYPE::SetKeyAt(int index, const KeyType &key) {
   BUSTUB_ASSERT(index < GetSize(), "index out of range !");
-  array_[index].first = key; 
+  array_[index].first = key;
 }
 
 /*
@@ -60,7 +60,7 @@ auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index) const -> ValueType {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetMappingType() -> MappingType* { return array_; }
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetMappingType() -> MappingType * { return array_; }
 
 // valuetype for internalNode should be page id_t
 template class BPlusTreeInternalPage<GenericKey<4>, page_id_t, GenericComparator<4>>;
