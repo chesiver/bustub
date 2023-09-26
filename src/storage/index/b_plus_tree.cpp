@@ -258,7 +258,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     idx += 1;
   }
   // Left
-  int half = (size + 1 + 1) / 2;
+  int half = (size + 1) / 2;
   cur_tree_page->SetSize(half);
   for (int i = 0; i < half; i += 1) {
     cur_tree_page->GetMappingType()[i] = tmp_entries[i];
