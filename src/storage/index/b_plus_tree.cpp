@@ -507,7 +507,20 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
+  /* Find leftmost leaf */
+  auto *cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
+  BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
+  while (!cur_tree_page->IsLeafPage()) {
+    auto *cur_tree_page_as_internal = reinterpret_cast<InternalPage *>(cur_tree_page);
+    page_id_t first_pid = cur_tree_page_as_internal->GetEntries()[0].second;
+    buffer_pool_manager_->UnpinPage(cur_tree_page_as_internal->GetPageId(), false);
+    cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(first_pid)->GetData());
+    BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
+  }
+  auto *cur_tree_page_as_leaf = reinterpret_cast<LeafPage *>(cur_tree_page);
+  return INDEXITERATOR_TYPE(buffer_pool_manager_, cur_tree_page_as_leaf);
+}
 
 /*
  * Input parameter is low key, find the leaf page that contains the input key
@@ -515,7 +528,27 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE()
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
+  auto *cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
+  BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
+  while (!cur_tree_page->IsLeafPage()) {
+    auto *cur_tree_page_as_internal = reinterpret_cast<InternalPage *>(cur_tree_page);
+    int p = FindEntriesWithKeyLargerThan<KeyType, page_id_t, KeyComparator>(
+        cur_tree_page_as_internal->GetSize(), cur_tree_page_as_internal->GetEntries(), key, comparator_);
+    p -= 1;
+    page_id_t pid = cur_tree_page_as_internal->GetEntries()[p].second;
+    buffer_pool_manager_->UnpinPage(cur_tree_page_as_internal->GetPageId(), false);
+    cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(pid)->GetData());
+    BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
+  }
+  auto *cur_tree_page_as_leaf = reinterpret_cast<LeafPage *>(cur_tree_page);
+  int idx = 0;
+  while (idx < cur_tree_page_as_leaf->GetSize() &&
+         comparator_(cur_tree_page_as_leaf->GetEntries()[idx].first, key) < 0) {
+    idx += 1;
+  }
+  return INDEXITERATOR_TYPE(buffer_pool_manager_, cur_tree_page_as_leaf, idx);
+}
 
 /*
  * Input parameter is void, construct an index iterator representing the end
@@ -523,7 +556,20 @@ auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return IN
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); }
+auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE {
+  /* Find rightmost leaf */
+  auto *cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
+  BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
+  while (!cur_tree_page->IsLeafPage()) {
+    auto *cur_tree_page_as_internal = reinterpret_cast<InternalPage *>(cur_tree_page);
+    page_id_t last_pid = cur_tree_page_as_internal->GetEntries()[cur_tree_page_as_internal->GetSize() - 1].second;
+    buffer_pool_manager_->UnpinPage(cur_tree_page_as_internal->GetPageId(), false);
+    cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(last_pid)->GetData());
+    BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
+  }
+  auto *cur_tree_page_as_leaf = reinterpret_cast<LeafPage *>(cur_tree_page);
+  return INDEXITERATOR_TYPE(buffer_pool_manager_, cur_tree_page_as_leaf, cur_tree_page_as_leaf->GetSize());
+}
 
 /**
  * @return Page id of the root of this tree
