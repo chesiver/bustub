@@ -46,18 +46,18 @@ class BPlusTree {
   auto IsEmpty() const -> bool;
 
   // Insert a key-value pair into this B+ tree.
-  void insertOnLeaf(B_PLUS_TREE_LEAF_PAGE_TYPE *leaf, const KeyType &key, const ValueType &value);
-  void insertOnParent(BPlusTreePage *left, const KeyType &key, BPlusTreePage *right);
+  void InsertOnLeaf(B_PLUS_TREE_LEAF_PAGE_TYPE *leaf, const KeyType &key, const ValueType &value);
+  void InsertOnParent(BPlusTreePage *left, const KeyType &key, BPlusTreePage *right);
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
 
   // Remove a key and its value from this B+ tree.
-  void removeLeafEntry(LeafPage *treePage, const KeyType &key, Transaction *transaction = nullptr);
-  void removeInternalEntry(InternalPage *treePage, const KeyType &key, Transaction *transaction = nullptr);
+  void RemoveLeafEntry(LeafPage *cur, const KeyType &key, Transaction *transaction = nullptr);
+  void RemoveInternalEntry(InternalPage *cur, const KeyType &key, Transaction *transaction = nullptr);
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
 
   // return the value associated with a given key
-  auto downToLeaf(const KeyType &key, Transaction *transaction) -> LeafPage *;
-  auto searchInLeaf(LeafPage *leaf, const KeyType &key, std::vector<ValueType> *result, Transaction *transaction)
+  auto DownToLeaf(const KeyType &key, Transaction *transaction) -> LeafPage *;
+  auto SearchInLeaf(LeafPage *leaf, const KeyType &key, std::vector<ValueType> *result, Transaction *transaction)
       -> bool;
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
 
@@ -96,6 +96,8 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+  // test
+  std::vector<int64_t> records_;
 };
 
 }  // namespace bustub
