@@ -27,24 +27,31 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return root_page_id_ == INVALID_P
  * SEARCH
  *****************************************************************************/
 INDEX_TEMPLATE_ARGUMENTS
+auto FindEntriesWithKeyLargerThan(int size, MappingType *entries, const KeyType &key, KeyComparator comparator) -> int {
+  int p = 0;
+  int q = size;
+  while (p < q) {
+    int mid = (p + q) / 2;
+    if (comparator(entries[mid].first, key) <= 0) {
+      p = mid + 1;
+    } else {
+      q = mid;
+    }
+  }
+  return p;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::DownToLeaf(const KeyType &key, Transaction *transaction) -> LeafPage * {
   // LOG_DEBUG("Start %lld", key.ToString());
   auto *cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
   BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
   while (!cur_tree_page->IsLeafPage()) {
     auto *cur_tree_page_as_internal = reinterpret_cast<InternalPage *>(cur_tree_page);
-    int p = 1;
-    int q = cur_tree_page_as_internal->GetSize();
-    while (p < q) {
-      int mid = (p + q) / 2;
-      if (comparator_(cur_tree_page_as_internal->GetMappingType()[mid].first, key) <= 0) {
-        p = mid + 1;
-      } else {
-        q = mid;
-      }
-    }
+    int p = FindEntriesWithKeyLargerThan<KeyType, page_id_t, KeyComparator>(
+        cur_tree_page_as_internal->GetSize(), cur_tree_page_as_internal->GetEntries(), key, comparator_);
     p -= 1;
-    page_id_t pid = cur_tree_page_as_internal->GetMappingType()[p].second;
+    page_id_t pid = cur_tree_page_as_internal->GetEntries()[p].second;
     buffer_pool_manager_->UnpinPage(cur_tree_page_as_internal->GetPageId(), false);
     cur_tree_page = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(pid)->GetData());
     BUSTUB_ASSERT(cur_tree_page != nullptr, "Current tree page cannot be null");
@@ -56,21 +63,12 @@ auto BPLUSTREE_TYPE::DownToLeaf(const KeyType &key, Transaction *transaction) ->
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::SearchInLeaf(LeafPage *leaf, const KeyType &key, std::vector<ValueType> *result,
                                   Transaction *transaction) -> bool {
-  int p = 0;
-  int q = leaf->GetSize();
-  while (p < q) {
-    int mid = (p + q) / 2;
-    if (comparator_(leaf->GetMappingType()[mid].first, key) < 0) {
-      p = mid + 1;
-    } else {
-      q = mid;
-    }
+  int p = FindEntriesWithKeyLargerThan(leaf->GetSize(), leaf->GetEntries(), key, comparator_) - 1;
+  if (p < 0 || comparator_(leaf->GetEntries()[p].first, key) != 0) {
+    return false;
   }
-  if (p < leaf->GetSize() && comparator_(leaf->GetMappingType()[p].first, key) == 0) {
-    *result = std::vector<ValueType>{leaf->GetMappingType()[p].second};
-    return true;
-  }
-  return false;
+  *result = std::vector<ValueType>{leaf->GetEntries()[p].second};
+  return true;
 }
 /*
  * Return the only value that associated with input key
@@ -92,22 +90,35 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  * INSERTION
  *****************************************************************************/
 INDEX_TEMPLATE_ARGUMENTS
+void SplitEntries(int size, MappingType *left, MappingType *right, const MappingType &entry, KeyComparator comparator) {
+  std::vector<MappingType> tmp(size + 1);
+  int idx = size;
+  while (idx > 0 && comparator(left[idx - 1].first, entry.first) > 0) {
+    tmp[idx] = left[idx - 1];
+    idx -= 1;
+  }
+  tmp[idx--] = entry;
+  while (idx >= 0) {
+    tmp[idx] = left[idx];
+    idx -= 1;
+  }
+  int half = (size + 1 + 1) / 2;
+  for (int i = 0; i < half; i += 1) {
+    left[i] = tmp[i];
+  }
+  for (int i = half; i < size + 1; i += 1) {
+    right[i - half] = tmp[i];
+  }
+}
+
+INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::InsertOnLeaf(B_PLUS_TREE_LEAF_PAGE_TYPE *leaf, const KeyType &key, const ValueType &value) {
   // LOG_DEBUG("Start %lld", key.ToString());
-  int p = 0;
-  int q = leaf->GetSize();
-  while (p < q) {
-    int mid = (p + q) / 2;
-    if (comparator_(leaf->GetMappingType()[mid].first, key) <= 0) {
-      p = mid + 1;
-    } else {
-      q = mid;
-    }
-  }
+  int p = FindEntriesWithKeyLargerThan(leaf->GetSize(), leaf->GetEntries(), key, comparator_);
   for (int i = leaf->GetSize() - 1; i >= p; i -= 1) {
-    leaf->GetMappingType()[i + 1] = leaf->GetMappingType()[i];
+    leaf->GetEntries()[i + 1] = leaf->GetEntries()[i];
   }
-  leaf->GetMappingType()[p] = std::make_pair(key, value);
+  leaf->GetEntries()[p] = std::make_pair(key, value);
   leaf->IncreaseSize(1);
 }
 
@@ -125,8 +136,8 @@ void BPLUSTREE_TYPE::InsertOnParent(BPlusTreePage *left, const KeyType &key, BPl
     auto *new_root = reinterpret_cast<InternalPage *>(root_page->GetData());
     new_root->Init(new_root_page_id, INVALID_PAGE_ID, internal_max_size_);
     new_root->SetSize(2);
-    new_root->GetMappingType()[0] = std::make_pair(KeyType{}, left->GetPageId());
-    new_root->GetMappingType()[1] = std::make_pair(key, right->GetPageId());
+    new_root->GetEntries()[0] = std::make_pair(KeyType{}, left->GetPageId());
+    new_root->GetEntries()[1] = std::make_pair(key, right->GetPageId());
     left->SetParentPageId(new_root_page_id);
     right->SetParentPageId(new_root_page_id);
     // Set root
@@ -145,55 +156,41 @@ void BPLUSTREE_TYPE::InsertOnParent(BPlusTreePage *left, const KeyType &key, BPl
     // Insert directly
     // LOG_DEBUG("Insert directly: %lld", key.ToString());
     int i = size;
-    while (i > 0 && comparator_(parent->GetMappingType()[i - 1].first, key) > 0) {
-      parent->GetMappingType()[i] = parent->GetMappingType()[i - 1];
+    while (i > 0 && comparator_(parent->GetEntries()[i - 1].first, key) > 0) {
+      parent->GetEntries()[i] = parent->GetEntries()[i - 1];
       i -= 1;
     }
-    parent->GetMappingType()[i] = std::make_pair(key, right->GetPageId());
+    parent->GetEntries()[i] = std::make_pair(key, right->GetPageId());
     parent->IncreaseSize(1);
     buffer_pool_manager_->UnpinPage(left->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(right->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(parent->GetPageId(), true);
   } else {
-    // Split
-    // LOG_DEBUG("Split: %lld", key.ToString());
-    std::vector<std::pair<KeyType, page_id_t>> tmp(size + 1);
-    int i = size;
-    while (i > 0 && comparator_(parent->GetMappingType()[i - 1].first, key) > 0) {
-      tmp[i] = parent->GetMappingType()[i - 1];
-      i -= 1;
-    }
-    tmp[i--] = std::make_pair(key, right->GetPageId());
-    while (i >= 0) {
-      tmp[i] = parent->GetMappingType()[i];
-      i -= 1;
-    }
-    // left
-    int half = (size + 1 + 1) / 2;
-    parent->SetSize(half);
-    for (int i = 0; i < half; i += 1) {
-      parent->GetMappingType()[i] = tmp[i];
-    }
-    // right
+    /* Split */
+    /* Create right page */
     page_id_t next_to_parent_page_id;
     Page *next_to_parent_page = buffer_pool_manager_->NewPage(&next_to_parent_page_id);
     auto *next_to_parent_tree_page = reinterpret_cast<InternalPage *>(next_to_parent_page->GetData());
     BUSTUB_ASSERT(next_to_parent_tree_page != nullptr, "Fail to create new Page - Check if all pages are pinned");
     next_to_parent_tree_page->Init(next_to_parent_page_id, parent->GetParentPageId(), internal_max_size_);
-    next_to_parent_tree_page->SetSize(size + 1 - half);
-    // redirect parent
-    for (int i = half; i < size + 1; i += 1) {
-      auto *child = reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(tmp[i].second)->GetData());
+    /* Split entries */
+    SplitEntries<KeyType, page_id_t, KeyComparator>(size, parent->GetEntries(), next_to_parent_tree_page->GetEntries(),
+                                                    std::make_pair(key, right->GetPageId()), comparator_);
+    parent->SetSize((size + 1) / 2);
+    next_to_parent_tree_page->SetSize(size + 1 - parent->GetSize());
+    /* Split Key */
+    const KeyType &parent_split_key = next_to_parent_tree_page->GetEntries()[0].first;
+    /* Redirect parent */
+    for (int i = 0; i < next_to_parent_tree_page->GetSize(); i += 1) {
+      auto *child = reinterpret_cast<BPlusTreePage *>(
+          buffer_pool_manager_->FetchPage(next_to_parent_tree_page->GetEntries()[i].second)->GetData());
       child->SetParentPageId(next_to_parent_page_id);
       buffer_pool_manager_->UnpinPage(child->GetPageId(), true);
     }
-    for (int i = half; i < size + 1; i += 1) {
-      next_to_parent_tree_page->GetMappingType()[i - half] = tmp[i];
-    }
+    /* Unpin */
     buffer_pool_manager_->UnpinPage(left->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(right->GetPageId(), true);
-    // recursive
-    const KeyType &parent_split_key = tmp[half].first;
+    /* Recursive */
     InsertOnParent(parent, parent_split_key, next_to_parent_tree_page);
   }
 }
@@ -208,16 +205,7 @@ void BPLUSTREE_TYPE::InsertOnParent(BPlusTreePage *left, const KeyType &key, BPl
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool {
   // LOG_DEBUG("Enter: %lld", key.ToString());
-  // records_.push_back(key.ToString());
-  // if (records_.size() % 50 == 0) {
-  //   std::ostringstream o;
-  //   for (int64_t num : records_) {
-  //     o << num << ' ';
-  //   }
-  //   LOG_INFO("keys: %s", o.str().c_str());
-  //   records_.clear();
-  // }
-  // Search leaf
+  /* Search leaf */
   LeafPage *cur_tree_page;
   if (IsEmpty()) {
     Page *page = buffer_pool_manager_->NewPage(&root_page_id_);
@@ -229,14 +217,14 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   } else {
     cur_tree_page = DownToLeaf(key, transaction);
   }
-  // Check duplicate
+  /* Check duplicate */
   // LOG_DEBUG("Check Duplicate %lld", key.ToString());
   std::vector<ValueType> tmp;
   if (SearchInLeaf(cur_tree_page, key, &tmp, transaction)) {
     buffer_pool_manager_->UnpinPage(cur_tree_page->GetPageId(), false);
     return false;
   }
-  // Insert
+  /* Insert */
   // LOG_DEBUG("Insert: %lld", key.ToString());
   int size = cur_tree_page->GetSize();
   if (size < cur_tree_page->GetMaxSize() - 1) {
@@ -244,40 +232,24 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     buffer_pool_manager_->UnpinPage(cur_tree_page->GetPageId(), true);
     return true;
   }
-  // Split
-  // LOG_DEBUG("Split: %lld", key.ToString());
-  std::vector<std::pair<KeyType, ValueType>> tmp_entries(size + 1);
-  int idx = 0;
-  while (idx < size && comparator_(cur_tree_page->GetMappingType()[idx].first, key) < 0) {
-    tmp_entries[idx] = cur_tree_page->GetMappingType()[idx];
-    idx += 1;
-  }
-  tmp_entries[idx++] = std::make_pair(key, value);
-  while (idx <= size) {
-    tmp_entries[idx] = cur_tree_page->GetMappingType()[idx - 1];
-    idx += 1;
-  }
-  // Left
-  int half = (size + 1) / 2;
-  cur_tree_page->SetSize(half);
-  for (int i = 0; i < half; i += 1) {
-    cur_tree_page->GetMappingType()[i] = tmp_entries[i];
-  }
-  // Right
+  /* Split */
+  /* Create right page */
   page_id_t next_to_cur_page_id;
   Page *next_to_cur_page = buffer_pool_manager_->NewPage(&next_to_cur_page_id);
   BUSTUB_ASSERT(next_to_cur_page != nullptr, "Fail to create new Page - Check if all pages are pinned");
   auto *next_to_cur_tree_page = reinterpret_cast<LeafPage *>(next_to_cur_page->GetData());
   next_to_cur_tree_page->Init(next_to_cur_page_id, cur_tree_page->GetParentPageId(), leaf_max_size_);
-  next_to_cur_tree_page->SetSize(size + 1 - half);
-  for (int i = half; i < size + 1; i += 1) {
-    next_to_cur_tree_page->GetMappingType()[i - half] = tmp_entries[i];
-  }
-  // Redirect next page id
+  /* Split entries */
+  SplitEntries(size, cur_tree_page->GetEntries(), next_to_cur_tree_page->GetEntries(), std::make_pair(key, value),
+               comparator_);
+  cur_tree_page->SetSize((size + 1) / 2);
+  next_to_cur_tree_page->SetSize(size + 1 - cur_tree_page->GetSize());
+  /* Split key */
+  const KeyType &parent_split_key = next_to_cur_tree_page->GetEntries()[0].first;
+  /* Redirect next page id */
   next_to_cur_tree_page->SetNextPageId(cur_tree_page->GetNextPageId());
   cur_tree_page->SetNextPageId(next_to_cur_page_id);
   // Recursive
-  const KeyType &parent_split_key = next_to_cur_tree_page->GetMappingType()[0].first;
   InsertOnParent(cur_tree_page, parent_split_key, next_to_cur_tree_page);
   return true;
 }
@@ -322,7 +294,7 @@ INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::RemoveLeafEntry(LeafPage *cur, const KeyType &key, Transaction *transaction) {
   // LOG_DEBUG("Page id: %d - key: %lld", cur->GetPageId(), key.ToString());
   // Delete in current node
-  bool removed = RemoveEntryLocally(cur->GetSize(), cur->GetMappingType(), key, comparator_);
+  bool removed = RemoveEntryLocally(cur->GetSize(), cur->GetEntries(), key, comparator_);
   if (!removed) {
     buffer_pool_manager_->UnpinPage(cur->GetPageId(), false);
     return;
@@ -339,9 +311,9 @@ void BPLUSTREE_TYPE::RemoveLeafEntry(LeafPage *cur, const KeyType &key, Transact
     auto *parent = reinterpret_cast<InternalPage *>(buffer_pool_manager_->FetchPage(cur->GetParentPageId())->GetData());
     // LOG_DEBUG("Parent page id: %d - key: %lld", parent->GetPageId(), key.ToString());
     auto [curIndexInParent, siblingIdxInParent, isPredecessor, splitKey] =
-        FindSibling<KeyType, page_id_t, KeyComparator>(parent->GetSize(), parent->GetMappingType(), cur->GetPageId());
+        FindSibling<KeyType, page_id_t, KeyComparator>(parent->GetSize(), parent->GetEntries(), cur->GetPageId());
     // LOG_DEBUG("splitKey: %lld", splitKey.ToString());
-    int sibling_page_id = parent->GetMappingType()[siblingIdxInParent].second;
+    int sibling_page_id = parent->GetEntries()[siblingIdxInParent].second;
     auto *sibling = reinterpret_cast<LeafPage *>(buffer_pool_manager_->FetchPage(sibling_page_id)->GetData());
     // LOG_DEBUG("Sibling page id: %d - key: %lld", sibling->GetPageId(), key.ToString());
     // If fit in same tree page
@@ -353,7 +325,7 @@ void BPLUSTREE_TYPE::RemoveLeafEntry(LeafPage *cur, const KeyType &key, Transact
       }
       // LOG_DEBUG("Merge: %d - %lld - %d", cur->GetPageId(), splitKey.ToString(), sibling->GetPageId());
       for (int i = 0; i < cur->GetSize(); i += 1) {
-        sibling->GetMappingType()[sibling->GetSize() + i] = cur->GetMappingType()[i];
+        sibling->GetEntries()[sibling->GetSize() + i] = cur->GetEntries()[i];
       }
       sibling->IncreaseSize(cur->GetSize());
       sibling->SetNextPageId(cur->GetNextPageId());
@@ -370,26 +342,26 @@ void BPLUSTREE_TYPE::RemoveLeafEntry(LeafPage *cur, const KeyType &key, Transact
       // Redistribution
       if (isPredecessor) {
         // Predecessor
-        MappingType last = sibling->GetMappingType()[sibling->GetSize() - 1];
+        MappingType last = sibling->GetEntries()[sibling->GetSize() - 1];
         sibling->IncreaseSize(-1);
         for (int i = cur->GetSize(); i > 0; i -= 1) {
-          cur->GetMappingType()[i] = cur->GetMappingType()[i - 1];
+          cur->GetEntries()[i] = cur->GetEntries()[i - 1];
         }
-        cur->GetMappingType()[0] = last;
+        cur->GetEntries()[0] = last;
         cur->IncreaseSize(1);
         // replace split key in parent
-        parent->GetMappingType()[curIndexInParent].first = last.first;
+        parent->GetEntries()[curIndexInParent].first = last.first;
       } else {
         // Successor
-        MappingType first = sibling->GetMappingType()[0];
+        MappingType first = sibling->GetEntries()[0];
         for (int i = 0; i < sibling->GetSize() - 1; i += 1) {
-          sibling->GetMappingType()[i] = sibling->GetMappingType()[i + 1];
+          sibling->GetEntries()[i] = sibling->GetEntries()[i + 1];
         }
         sibling->IncreaseSize(-1);
-        cur->GetMappingType()[cur->GetSize()] = first;
+        cur->GetEntries()[cur->GetSize()] = first;
         cur->IncreaseSize(1);
         // replace split key in parent
-        parent->GetMappingType()[siblingIdxInParent].first = sibling->GetMappingType()[0].first;
+        parent->GetEntries()[siblingIdxInParent].first = sibling->GetEntries()[0].first;
       }
       buffer_pool_manager_->UnpinPage(cur->GetPageId(), true);
       buffer_pool_manager_->UnpinPage(sibling->GetPageId(), true);
@@ -405,7 +377,7 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(InternalPage *cur, const KeyType &key, 
   // LOG_DEBUG("Start Page id: %d - key: %lld", cur->GetPageId(), key.ToString());
   // Delete in current node
   bool removed =
-      RemoveEntryLocally<KeyType, page_id_t, KeyComparator>(cur->GetSize(), cur->GetMappingType(), key, comparator_);
+      RemoveEntryLocally<KeyType, page_id_t, KeyComparator>(cur->GetSize(), cur->GetEntries(), key, comparator_);
   if (!removed) {
     buffer_pool_manager_->UnpinPage(cur->GetPageId(), false);
     return;
@@ -417,8 +389,8 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(InternalPage *cur, const KeyType &key, 
     if (cur->GetSize() == 1) {
       // LOG_DEBUG("Only one child - page id: %d - key: %lld", cur->GetPageId(), key.ToString());
       // Redirect new root if current one is not leaf page
-      auto *child = reinterpret_cast<BPlusTreePage *>(
-          buffer_pool_manager_->FetchPage(cur->GetMappingType()[0].second)->GetData());
+      auto *child =
+          reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(cur->GetEntries()[0].second)->GetData());
       // Reset root
       root_page_id_ = child->GetPageId();
       child->SetParentPageId(INVALID_PAGE_ID);
@@ -437,9 +409,9 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(InternalPage *cur, const KeyType &key, 
     auto *parent = reinterpret_cast<InternalPage *>(buffer_pool_manager_->FetchPage(cur->GetParentPageId())->GetData());
     // LOG_DEBUG("Parent page id: %d - key: %lld", parent->GetPageId(), key.ToString());
     auto [curIndexInParent, siblingIdxInParent, isPredecessor, splitKey] =
-        FindSibling<KeyType, page_id_t, KeyComparator>(parent->GetSize(), parent->GetMappingType(), cur->GetPageId());
+        FindSibling<KeyType, page_id_t, KeyComparator>(parent->GetSize(), parent->GetEntries(), cur->GetPageId());
     // LOG_DEBUG("splitKey: %lld", splitKey.ToString());
-    int sibling_page_id = parent->GetMappingType()[siblingIdxInParent].second;
+    int sibling_page_id = parent->GetEntries()[siblingIdxInParent].second;
     auto *sibling = reinterpret_cast<InternalPage *>(buffer_pool_manager_->FetchPage(sibling_page_id)->GetData());
     // LOG_DEBUG("Sibling page id: %d - key: %lld", sibling->GetPageId(), key.ToString());
     // If fit in same tree page
@@ -451,10 +423,10 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(InternalPage *cur, const KeyType &key, 
       }
       // LOG_DEBUG("Merge: %d - %lld - %d", cur->GetPageId(), splitKey.ToString(), sibling->GetPageId());
       for (int i = 0; i < cur->GetSize(); i += 1) {
-        sibling->GetMappingType()[sibling->GetSize() + i] = cur->GetMappingType()[i];
+        sibling->GetEntries()[sibling->GetSize() + i] = cur->GetEntries()[i];
         // Redirect children's parent after merge
-        auto *child_tree_page = reinterpret_cast<BPlusTreePage *>(
-            buffer_pool_manager_->FetchPage(cur->GetMappingType()[i].second)->GetData());
+        auto *child_tree_page =
+            reinterpret_cast<BPlusTreePage *>(buffer_pool_manager_->FetchPage(cur->GetEntries()[i].second)->GetData());
         child_tree_page->SetParentPageId(sibling->GetPageId());
         buffer_pool_manager_->UnpinPage(child_tree_page->GetPageId(), true);
       }
@@ -473,13 +445,13 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(InternalPage *cur, const KeyType &key, 
       if (isPredecessor) {
         // Predecessor
         // LOG_DEBUG("Redistribution predecessor");
-        std::pair<KeyType, page_id_t> last = sibling->GetMappingType()[sibling->GetSize() - 1];
+        std::pair<KeyType, page_id_t> last = sibling->GetEntries()[sibling->GetSize() - 1];
         sibling->IncreaseSize(-1);
         for (int i = cur->GetSize(); i > 0; i -= 1) {
-          cur->GetMappingType()[i] = cur->GetMappingType()[i - 1];
+          cur->GetEntries()[i] = cur->GetEntries()[i - 1];
         }
-        cur->GetMappingType()[0] = last;
-        cur->GetMappingType()[1].first = splitKey;
+        cur->GetEntries()[0] = last;
+        cur->GetEntries()[1].first = splitKey;
         cur->IncreaseSize(1);
         // redirect child
         auto *child_tree_page =
@@ -487,16 +459,16 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(InternalPage *cur, const KeyType &key, 
         child_tree_page->SetParentPageId(cur->GetPageId());
         buffer_pool_manager_->UnpinPage(child_tree_page->GetPageId(), true);
         // replace split key in parent
-        parent->GetMappingType()[curIndexInParent].first = last.first;
+        parent->GetEntries()[curIndexInParent].first = last.first;
       } else {
         // Successor
         // LOG_DEBUG("Redistribution successor");
-        std::pair<KeyType, page_id_t> first = sibling->GetMappingType()[0];
+        std::pair<KeyType, page_id_t> first = sibling->GetEntries()[0];
         for (int i = 0; i < sibling->GetSize() - 1; i += 1) {
-          sibling->GetMappingType()[i] = sibling->GetMappingType()[i + 1];
+          sibling->GetEntries()[i] = sibling->GetEntries()[i + 1];
         }
         sibling->IncreaseSize(-1);
-        cur->GetMappingType()[cur->GetSize()] = first;
+        cur->GetEntries()[cur->GetSize()] = first;
         cur->IncreaseSize(1);
         // redirect child
         auto *child_tree_page =
@@ -504,7 +476,7 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(InternalPage *cur, const KeyType &key, 
         child_tree_page->SetParentPageId(cur->GetPageId());
         buffer_pool_manager_->UnpinPage(child_tree_page->GetPageId(), true);
         // replace split key in parent
-        parent->GetMappingType()[siblingIdxInParent].first = sibling->GetMappingType()[0].first;
+        parent->GetEntries()[siblingIdxInParent].first = sibling->GetEntries()[0].first;
       }
       // Unpin
       buffer_pool_manager_->UnpinPage(cur->GetPageId(), true);

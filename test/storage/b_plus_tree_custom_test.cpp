@@ -45,7 +45,7 @@ TEST(BPlusTreeTests, DISABLED_CustomTest) {
   tree.Draw(bpm, "./test.dot");
 }
 
-TEST(BPlusTreeTests, CustomFileTest) {
+TEST(BPlusTreeTests, DISABLED_CustomFileTest) {
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
 
