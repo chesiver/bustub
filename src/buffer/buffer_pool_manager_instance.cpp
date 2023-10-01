@@ -12,6 +12,9 @@
 
 #include "buffer/buffer_pool_manager_instance.h"
 
+#include <fmt/color.h>
+#include <fmt/std.h>
+
 #include "common/exception.h"
 #include "common/logger.h"
 #include "common/macros.h"
@@ -45,7 +48,6 @@ auto BufferPoolManagerInstance::GetFreePageAndFlushIfDirty() -> frame_id_t {
     frame_id = free_list_.back();
     free_list_.pop_back();
   } else {
-    // if all frames are currently in use and not evictable (in another word, pinned)
     if (!replacer_->Evict(&frame_id)) {
       return -1;
     }
@@ -68,6 +70,9 @@ auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
   // Try get free frame with metadata reset
   frame_id_t frame_id = GetFreePageAndFlushIfDirty();
   if (frame_id == -1) {
+    // for (size_t i = 0; i < pool_size_; i += 1) {
+    //   LOG_DEBUG("Error: page id: {} - pin count: {}", pages_[i].GetPageId(), pages_[i].GetPinCount());
+    // }
     latch_.unlock();
     return nullptr;
   }
@@ -124,22 +129,29 @@ auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> 
   latch_.lock();
   BUSTUB_ASSERT(page_id != INVALID_PAGE_ID, "cannot be invalid page id");
 
+  // LOG_DEBUG("Start: %d", page_id);
   frame_id_t frame_id;
   if (!page_table_->Find(page_id, frame_id)) {
+    // LOG_DEBUG("Not found in page table");
     latch_.unlock();
     return false;
   }
   if (pages_[frame_id].GetPinCount() <= 0) {
+    // LOG_DEBUG("Pin count already 0");
     latch_.unlock();
     return false;
   }
+
   pages_[frame_id].pin_count_ -= 1;
   if (pages_[frame_id].GetPinCount() == 0) {
+    // LOG_DEBUG("Set evictable to be true - page id: %d", page_id);
     replacer_->SetEvictable(frame_id, true);
   }
   if (is_dirty) {
     pages_[frame_id].is_dirty_ = is_dirty;
   }
+
+  // LOG_DEBUG("End - page id: %d - pin count: %d", page_id, pages_[frame_id].pin_count_);
 
   latch_.unlock();
   return true;

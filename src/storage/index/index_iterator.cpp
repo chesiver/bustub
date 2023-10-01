@@ -22,30 +22,28 @@ INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE::~IndexIterator() = default;  // NOLINT
 
 INDEX_TEMPLATE_ARGUMENTS
-auto INDEXITERATOR_TYPE::IsEnd() -> bool {
-  return idx_ >= current_tree_page_->GetSize() && current_tree_page_->GetNextPageId() == INVALID_PAGE_ID;
-}
+auto INDEXITERATOR_TYPE::IsEnd() -> bool { return current_tree_page_ == nullptr; }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto INDEXITERATOR_TYPE::operator*() -> const MappingType & {
-  if (idx_ >= current_tree_page_->GetSize()) {
-    page_id_t next_page_id = current_tree_page_->GetNextPageId();
-    auto *next_tree_page = reinterpret_cast<LeafPage *>(buffer_pool_manager_->FetchPage(next_page_id)->GetData());
-    current_tree_page_ = next_tree_page;
-    idx_ = 0;
-  }
-  return current_tree_page_->GetEntries()[idx_];
-}
+auto INDEXITERATOR_TYPE::operator*() -> const MappingType & { return current_tree_page_->GetEntries()[idx_]; }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
+  idx_ += 1;
   if (idx_ >= current_tree_page_->GetSize()) {
+    page_id_t current_tree_page_id = current_tree_page_->GetPageId();
     page_id_t next_page_id = current_tree_page_->GetNextPageId();
-    auto *next_tree_page = reinterpret_cast<LeafPage *>(buffer_pool_manager_->FetchPage(next_page_id)->GetData());
-    current_tree_page_ = next_tree_page;
-    idx_ = 0;
-  } else {
-    idx_ += 1;
+    if (next_page_id == INVALID_PAGE_ID) {
+      current_tree_page_ = nullptr;
+      idx_ = 0;
+    } else {
+      auto *next_tree_page = reinterpret_cast<LeafPage *>(buffer_pool_manager_->FetchPage(next_page_id)->GetData());
+      BUSTUB_ASSERT(next_tree_page != nullptr, "cannot fetch next page");
+      current_tree_page_ = next_tree_page;
+      idx_ = 0;
+    }
+    /* Unpin current */
+    buffer_pool_manager_->UnpinPage(current_tree_page_id, false);
   }
   return *this;
 }

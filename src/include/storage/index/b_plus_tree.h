@@ -10,14 +10,24 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
+#include <fmt/chrono.h>
+#include <fmt/color.h>
+#include <fmt/std.h>
+
+#include <cstdio>
+#include <fstream>
+#include <iostream>
 #include <queue>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "concurrency/transaction.h"
 #include "storage/index/index_iterator.h"
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
+
+// #include "common/mylogger.h"
 
 namespace bustub {
 
@@ -39,24 +49,32 @@ class BPlusTree {
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
 
  public:
+  enum class Operation { Read, Insert, Remove };
   explicit BPlusTree(std::string name, BufferPoolManager *buffer_pool_manager, const KeyComparator &comparator,
                      int leaf_max_size = LEAF_PAGE_SIZE, int internal_max_size = INTERNAL_PAGE_SIZE);
 
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
 
+  auto IsSafeEntries(BPlusTreePage *tree_page, Operation op) -> bool;
+  auto CreatePageWithSpin(page_id_t *page_id) -> Page *;
+  void ReleasePage(Page *page, bool dirty_flag);
+  void ReleaseWLatches(Transaction *transaction);
+
   // Insert a key-value pair into this B+ tree.
   void InsertOnLeaf(B_PLUS_TREE_LEAF_PAGE_TYPE *leaf, const KeyType &key, const ValueType &value);
-  void InsertOnParent(BPlusTreePage *left, const KeyType &key, BPlusTreePage *right);
+  void InsertOnParent(Page *left_page, const KeyType &key, Page *right_page, Transaction *transaction = nullptr);
   auto Insert(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
 
   // Remove a key and its value from this B+ tree.
-  void RemoveLeafEntry(LeafPage *cur, const KeyType &key, Transaction *transaction = nullptr);
-  void RemoveInternalEntry(InternalPage *cur, const KeyType &key, Transaction *transaction = nullptr);
+  void RemoveLeafEntry(Page *cur_page, const KeyType &key, Transaction *transaction = nullptr);
+  void RemoveInternalEntry(Page *cur_page, const KeyType &key, Transaction *transaction = nullptr);
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
 
   // return the value associated with a given key
-  auto DownToLeaf(const KeyType &key, Transaction *transaction) -> LeafPage *;
+  auto DownToLeafForRead(const KeyType &key, Transaction *transaction) -> Page *;
+  auto DownToLeafForWrite(const KeyType &key, Transaction *transaction, Operation op) -> Page *;
+  auto DownToLeaf(const KeyType &key, Transaction *transaction, Operation op) -> LeafPage *;
   auto SearchInLeaf(LeafPage *leaf, const KeyType &key, std::vector<ValueType> *result, Transaction *transaction)
       -> bool;
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
@@ -96,6 +114,9 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+  // latch
+  ReaderWriterLatch root_latch_;
+  std::mutex unpin_mtx_;
   // test
   std::vector<int64_t> records_;
 };
