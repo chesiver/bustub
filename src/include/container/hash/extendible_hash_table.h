@@ -19,7 +19,7 @@
 
 #include <list>
 #include <memory>
-#include <mutex>  // NOLINT
+#include <shared_mutex>
 #include <utility>
 #include <vector>
 
@@ -113,17 +113,32 @@ class ExtendibleHashTable : public HashTable<K, V> {
     explicit Bucket(size_t size, int depth = 0, int bucket_index = 0);
 
     /** @brief Check if a bucket is full. */
-    inline auto IsFull() const -> bool { return list_.size() == size_; }
+    inline auto IsFull() const -> bool {
+      // std::shared_lock<std::shared_mutex> lock(latch_);
+      return list_.size() == size_;
+    }
 
     /** @brief Get the local depth of the bucket. */
-    inline auto GetDepth() const -> int { return depth_; }
+    inline auto GetDepth() const -> int {
+      // std::shared_lock<std::shared_mutex> lock(latch_);
+      return depth_;
+    }
 
     /** @brief Increment the local depth of a bucket. */
-    inline void IncrementDepth() { depth_++; }
+    inline void IncrementDepth() {
+      // std::unique_lock<std::shared_mutex> lock(latch_);
+      depth_ += 1;
+    }
 
-    inline auto GetItems() -> std::list<std::pair<K, V>> & { return list_; }
+    inline auto GetItems() -> std::list<std::pair<K, V>> & {
+      // std::shared_lock<std::shared_mutex> lock(latch_);
+      return list_;
+    }
 
-    inline auto GetIndex() const -> int { return bucket_index_; }
+    inline auto GetIndex() const -> int {
+      // std::shared_lock<std::shared_mutex> lock(latch_);
+      return bucket_index_;
+    }
 
     /**
      *
@@ -174,7 +189,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
   int global_depth_;    // The global depth of the directory
   size_t bucket_size_;  // The size of a bucket
   int num_buckets_;     // The number of buckets in the hash table
-  mutable std::mutex latch_;
+  mutable std::shared_mutex latch_;
   std::vector<std::shared_ptr<Bucket>> dir_;  // The directory of the hash table
 
   // The following functions are completely optional, you can delete them if you have your own ideas.

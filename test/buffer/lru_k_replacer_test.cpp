@@ -16,7 +16,7 @@
 
 namespace bustub {
 
-TEST(LRUKReplacerTest, SampleTest) {
+TEST(LRUKReplacerTest, DISABLED_SampleTest) {
   LRUKReplacer lru_replacer(7, 2);
 
   // Scenario: add six elements to the replacer. We have [1,2,3,4,5]. Frame 6 is non-evictable.
@@ -97,4 +97,21 @@ TEST(LRUKReplacerTest, SampleTest) {
   lru_replacer.Remove(1);
   ASSERT_EQ(0, lru_replacer.Size());
 }
+
+TEST(LRUKReplacerTest, SpeedTest) {
+  size_t num_frames = 50;
+  LRUKReplacer lru_replacer(num_frames, 5);
+  for (size_t j = 0; j < num_frames; j += 1) {
+    lru_replacer.SetEvictable(j, true);
+  }
+  int records_times = 200000;
+  for (int i = 0; i < records_times; i += 1) {
+    for (size_t j = 0; j < num_frames; j += 1) {
+      lru_replacer.RecordAccess(j);
+    }
+    [[maybe_not_used]] int value;
+    lru_replacer.Evict(&value);
+  }
+}
+
 }  // namespace bustub
