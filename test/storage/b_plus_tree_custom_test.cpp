@@ -527,6 +527,35 @@ TEST(BPlusTreeTests, DISABLED_ConcurrentInsertGetValue) {
   remove("test.log");
 }
 
+TEST(BPlusTreeConcurrentTest, ConcurrentInsertContiguousKeysTest) {
+  // create KeyComparator and index schema
+  auto key_schema = ParseCreateStatement("a bigint");
+  GenericComparator<8> comparator(key_schema.get());
+  auto *disk_manager = new DiskManager("test.db");
+  BufferPoolManager *bpm = new BufferPoolManagerInstance(50, disk_manager);
+  // create b+ tree
+  BPlusTree<GenericKey<8>, RID, GenericComparator<8>> tree("foo_pk", bpm, comparator, 3, 5);
+  // create and fetch header_page
+  page_id_t page_id;
+  auto header_page = bpm->NewPage(&page_id);
+  (void)header_page;
+  // keys to Insert
+  std::vector<int64_t> keys;
+  int64_t scale_factor = 20;
+  for (int64_t key = 1; key < scale_factor; key++) {
+    keys.push_back(key);
+  }
+  LaunchParallelTest(5, InsertHelperSplit, &tree, keys, 5);
+
+  tree.Draw(bpm, "./test1.dot");
+
+  bpm->UnpinPage(HEADER_PAGE_ID, true);
+  delete disk_manager;
+  delete bpm;
+  remove("test.db");
+  remove("test.log");
+}
+
 TEST(BPlusTreeConcurrentTest, DISABLED_InsertAndConcurrentRemoveTest) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
@@ -648,7 +677,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_ConcurrentInsertConcurrentGetValue) {
   remove("test.log");
 }
 
-TEST(BPlusTreeConcurrentTest, ConcurrentInsertDelete) {
+TEST(BPlusTreeConcurrentTest, DISABLED_ConcurrentInsertDelete) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());

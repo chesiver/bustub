@@ -1,3 +1,5 @@
+#pragma once
+
 #include <fmt/chrono.h>
 #include <fmt/color.h>
 #include <fmt/std.h>
@@ -5,9 +7,6 @@
 #include <cstdio>
 
 namespace bustub {
-
-#ifndef ThreadMap_H
-#define ThreadMap_H
 
 class ThreadMap {
  public:
@@ -28,7 +27,6 @@ class ThreadMap {
   std::mutex m_;
   std::unordered_map<std::thread::id, int> thread_map_;
 };
-#endif
 
 inline ThreadMap global_thread_map;
 
@@ -36,14 +34,14 @@ inline std::ofstream output_stream;
 
 inline FILE *output_file;
 
-#undef LOG_DEBUG
-#define LOG_DEBUG(...)                                              \
+#undef MY_LOG_DEBUG
+#define MY_LOG_DEBUG(...)                                           \
   {                                                                 \
     auto out = fmt::memory_buffer();                                \
     OutputLogHeaderV2(out, __SHORT_FILE__, __LINE__, __FUNCTION__); \
     fmt::format_to(std::back_inserter(out), __VA_ARGS__);           \
     fmt::format_to(std::back_inserter(out), "\n");                  \
-    fmt::print(output_file, fmt::to_string(out));                   \
+    fmt::print(fmt::to_string(out));                                \
   }
 
 inline void OutputLogHeaderV2(fmt::memory_buffer &out, const char *file, int line, const char *func) {

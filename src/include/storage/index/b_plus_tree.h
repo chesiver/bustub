@@ -27,8 +27,6 @@
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
 
-// #include "common/mylogger.h"
-
 namespace bustub {
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
@@ -43,13 +41,14 @@ namespace bustub {
  * (3) The structure should shrink and grow dynamically
  * (4) Implement index iterator for range scan
  */
+enum class Operation { Read, Insert, Remove };
+
 INDEX_TEMPLATE_ARGUMENTS
 class BPlusTree {
   using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
 
  public:
-  enum class Operation { Read, Insert, Remove };
   explicit BPlusTree(std::string name, BufferPoolManager *buffer_pool_manager, const KeyComparator &comparator,
                      int leaf_max_size = LEAF_PAGE_SIZE, int internal_max_size = INTERNAL_PAGE_SIZE);
 
@@ -73,6 +72,7 @@ class BPlusTree {
 
   // return the value associated with a given key
   auto DownToLeafForRead(const KeyType &key, Transaction *transaction) -> Page *;
+  auto OptimisticDownToLeafForWrite(const KeyType &key, Transaction *transaction) -> Page *;
   auto DownToLeafForWrite(const KeyType &key, Transaction *transaction, Operation op) -> Page *;
   auto DownToLeaf(const KeyType &key, Transaction *transaction, Operation op) -> LeafPage *;
   auto SearchInLeaf(LeafPage *leaf, const KeyType &key, std::vector<ValueType> *result, Transaction *transaction)
