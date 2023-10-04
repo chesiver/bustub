@@ -29,7 +29,7 @@ void LaunchParallelTest(uint64_t num_threads, Args &&...args) {
   // Launch a group of threads
   for (uint64_t thread_itr = 0; thread_itr < num_threads; ++thread_itr) {
     thread_group.push_back(std::thread(args..., thread_itr));
-    global_thread_map.AddThreadId(thread_group[thread_itr].get_id());
+    // global_thread_map.AddThreadId(thread_group[thread_itr].get_id());
   }
 
   // Join the threads with the main thread
@@ -171,7 +171,7 @@ TEST(BPlusTreeConcurrentTest, InsertTest2) {
   (void)header_page;
   // keys to Insert
   std::vector<int64_t> keys;
-  int64_t scale_factor = 20;
+  int64_t scale_factor = 100000;
   for (int64_t key = 1; key < scale_factor; key++) {
     keys.push_back(key);
   }

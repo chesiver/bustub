@@ -1,0 +1,6 @@
+
+set(B_PLUS_TREE_BENCHMARK_SOURCES b_plus_tree_benchmark.cpp)
+add_executable(b_plus_tree_benchmark ${B_PLUS_TREE_BENCHMARK_SOURCES})
+
+target_link_libraries(b_plus_tree_benchmark bustub)
+set_target_properties(b_plus_tree_benchmark PROPERTIES OUTPUT_NAME b_plus_tree_benchmark)

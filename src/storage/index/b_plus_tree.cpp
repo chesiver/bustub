@@ -41,6 +41,17 @@ auto FindEntriesWithKeyLargerThan(int size, MappingType *entries, const KeyType 
   return p;
 }
 
+auto GetPageFromTransactionPageSet(page_id_t page_id, Transaction *transaction) -> Page * {
+  auto pages = transaction->GetPageSet();
+  for (auto it = pages->rbegin(); it != pages->rend(); ++it) {
+    Page *page = *it;
+    if (page->GetPageId() == page_id) {
+      return page;
+    }
+  }
+  return nullptr;
+}
+
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::IsSafeEntries(BPlusTreePage *tree_page, Operation op) -> bool {
   if (op == Operation::Insert) {
@@ -325,7 +336,7 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
     return;
   }
   // Normal
-  Page *parent_page = buffer_pool_manager_->FetchPage(left_tree_page->GetParentPageId());
+  Page *parent_page = GetPageFromTransactionPageSet(left_tree_page->GetParentPageId(), transaction);
   auto *parent_tree_page = reinterpret_cast<InternalPage *>(parent_page->GetData());
   int size = parent_tree_page->GetSize();
   if (size < parent_tree_page->GetMaxSize()) {
@@ -338,8 +349,6 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
     }
     parent_tree_page->GetEntries()[i] = std::make_pair(key, right_tree_page->GetPageId());
     parent_tree_page->IncreaseSize(1);
-    /* Unpin */
-    buffer_pool_manager_->UnpinPage(parent_page->GetPageId(), true);
     // MY_LOG_DEBUG("Finish insert directly: {}", key.ToString());
     return;
   }
@@ -370,10 +379,8 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
     child_tree_page->SetParentPageId(next_to_parent_page_id);
     buffer_pool_manager_->UnpinPage(child_page->GetPageId(), true);
   }
-  /* Unpin */
-  buffer_pool_manager_->UnpinPage(parent_page->GetPageId(), true);
   /* Recursive */
-  InsertOnParent(parent_page, parent_split_key, next_to_parent_page);
+  InsertOnParent(parent_page, parent_split_key, next_to_parent_page, transaction);
   /* Release */
   ReleasePage(next_to_parent_page, true);
   // MY_LOG_DEBUG("Finish split for insert: {}", key.ToString());
@@ -461,7 +468,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   next_to_cur_tree_page->SetNextPageId(cur_tree_page->GetNextPageId());
   cur_tree_page->SetNextPageId(next_to_cur_page_id);
   /* Recursive */
-  InsertOnParent(cur_page, parent_split_key, next_to_cur_page);
+  InsertOnParent(cur_page, parent_split_key, next_to_cur_page, transaction);
   /* Release */
   ReleasePage(next_to_cur_page, true);
   ReleaseWLatches(transaction);
@@ -528,11 +535,8 @@ void BPLUSTREE_TYPE::RemoveLeafEntry(Page *cur_page, const KeyType &key, Transac
       return;
     }
     /* Find previous / next child */
-    Page *parent_page = buffer_pool_manager_->FetchPage(cur_tree_page->GetParentPageId());
-    BUSTUB_ASSERT(parent_page != nullptr, "cannot fetch parent page");
+    Page *parent_page = GetPageFromTransactionPageSet(cur_tree_page->GetParentPageId(), transaction);
     // MY_LOG_DEBUG("Parent page id: {} - key: {}", parent_page->GetPageId(), key.ToString());
-    /* Unpin parent page */
-    buffer_pool_manager_->UnpinPage(parent_page->GetPageId(), false);
     /* Get index */
     auto *parent_tree_page = reinterpret_cast<InternalPage *>(parent_page->GetData());
     auto [curIndexInParent, siblingIdxInParent, isPredecessor, splitKey] =
@@ -633,11 +637,9 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(Page *cur_page, const KeyType &key, Tra
   /* If too few pointers */
   if (cur_tree_page->GetSize() < cur_tree_page->GetMinSize()) {
     /* Find previous / next child */
-    Page *parent_page = buffer_pool_manager_->FetchPage(cur_tree_page->GetParentPageId());
+    Page *parent_page = GetPageFromTransactionPageSet(cur_tree_page->GetParentPageId(), transaction);
     BUSTUB_ASSERT(parent_page != nullptr, "cannot fetch parent page");
     // MY_LOG_DEBUG("Parent page id: {} - key: {}", parent_page->GetPageId(), key.ToString());
-    /* Unpin parent */
-    buffer_pool_manager_->UnpinPage(parent_page->GetPageId(), false);
     /* Get index */
     auto *parent_tree_page = reinterpret_cast<InternalPage *>(parent_page->GetData());
     auto [curIndexInParent, siblingIdxInParent, isPredecessor, splitKey] =
