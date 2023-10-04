@@ -118,6 +118,7 @@ auto BPLUSTREE_TYPE::DownToLeafForRead(const KeyType &key, Transaction *transact
   // MY_LOG_DEBUG("Fetched for page id: {} - key: {}", cur_page->GetPageId(), key.ToString());
   BUSTUB_ASSERT(cur_page != nullptr, "cannot fetch page");
   cur_page->RLatch();
+  root_latch_.RUnlock();
   // MY_LOG_DEBUG("Obtain read latch for page id: {} - key: {}", cur_page->GetPageId(), key.ToString());
   auto *cur_tree_page = reinterpret_cast<BPlusTreePage *>(cur_page->GetData());
   while (!cur_tree_page->IsLeafPage()) {
@@ -126,10 +127,6 @@ auto BPLUSTREE_TYPE::DownToLeafForRead(const KeyType &key, Transaction *transact
         cur_tree_page_as_internal->GetSize(), cur_tree_page_as_internal->GetEntries(), key, comparator_);
     p -= 1;
     page_id_t next_pid = cur_tree_page_as_internal->GetEntries()[p].second;
-    /* Special root latch unlocked */
-    if (cur_tree_page->IsRootPage()) {
-      root_latch_.RUnlock();
-    }
     /* Next */
     Page *next_page = buffer_pool_manager_->FetchPage(next_pid);
     BUSTUB_ASSERT(next_page != nullptr, "cannot fetch page");
@@ -157,6 +154,7 @@ auto BPLUSTREE_TYPE::OptimisticDownToLeafForWrite(const KeyType &key, Transactio
   // MY_LOG_DEBUG("Fetched for page id: {} - key: {}", cur_page->GetPageId(), key.ToString());
   BUSTUB_ASSERT(cur_page != nullptr, "cannot fetch page");
   cur_page->RLatch();
+  root_latch_.RUnlock();
   // MY_LOG_DEBUG("Obtain read latch for page id: {} - key: {}", cur_page->GetPageId(), key.ToString());
   while (!cur_tree_page->IsLeafPage()) {
     auto *cur_tree_page_as_internal = reinterpret_cast<InternalPage *>(cur_tree_page);
@@ -164,10 +162,6 @@ auto BPLUSTREE_TYPE::OptimisticDownToLeafForWrite(const KeyType &key, Transactio
         cur_tree_page_as_internal->GetSize(), cur_tree_page_as_internal->GetEntries(), key, comparator_);
     p -= 1;
     page_id_t next_pid = cur_tree_page_as_internal->GetEntries()[p].second;
-    /* Special root latch unlocked */
-    if (cur_tree_page->IsRootPage()) {
-      root_latch_.RUnlock();
-    }
     /* Next */
     Page *next_page = buffer_pool_manager_->FetchPage(next_pid);
     BUSTUB_ASSERT(next_page != nullptr, "cannot fetch page");
@@ -264,10 +258,6 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   auto leaf_tree_page = reinterpret_cast<LeafPage *>(leaf_page->GetData());
   // MY_LOG_DEBUG("Find leaf page id: {} - key: {}", leaf_page->GetPageId(), key.ToString());
   bool found = SearchInLeaf(leaf_tree_page, key, result, transaction);
-  /* Special release for root latch */
-  if (leaf_tree_page->IsRootPage()) {
-    root_latch_.RUnlock();
-  }
   ReleasePage(buffer_pool_manager_, leaf_page, false);
   // MY_LOG_DEBUG("Finish {}", key.ToString());
   return found;
@@ -323,6 +313,7 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
     Page *root_page = CreatePageWithSpin(buffer_pool_manager_, &new_root_page_id);
     // MY_LOG_DEBUG("Create root page id: {} - key: {}", new_root_page_id, key.ToString());
     BUSTUB_ASSERT(root_page != nullptr, "Fail to create root page - Check if all pages are pinned");
+    root_page->WLatch();
     /* Create B+ tree page */
     auto *new_root = reinterpret_cast<InternalPage *>(root_page->GetData());
     new_root->Init(new_root_page_id, INVALID_PAGE_ID, internal_max_size_);
@@ -335,7 +326,7 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
     root_page_id_ = new_root_page_id;
     UpdateRootPageId(false);
     /* Unpin */
-    buffer_pool_manager_->UnpinPage(root_page->GetPageId(), true);
+    ReleasePage(buffer_pool_manager_, root_page, true);
     return;
   }
   // Normal
@@ -549,7 +540,7 @@ void BPLUSTREE_TYPE::RemoveLeafEntry(Page *cur_page, const KeyType &key, Transac
     /* Get sibling page */
     page_id_t sibling_page_id = parent_tree_page->GetEntries()[siblingIdxInParent].second;
     Page *sibling_page = buffer_pool_manager_->FetchPage(sibling_page_id);
-    /* Must put write lock on sibling*/
+    /* Must put write lock on sibling */
     sibling_page->WLatch();
     auto *sibling_tree_page = reinterpret_cast<LeafPage *>(sibling_page->GetData());
     // MY_LOG_DEBUG("Sibling page id: {} - key: {}", sibling_tree_page->GetPageId(), key.ToString());

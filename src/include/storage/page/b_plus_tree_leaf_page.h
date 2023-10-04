@@ -50,7 +50,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void SetNextPageId(page_id_t next_page_id);
   auto KeyAt(int index) const -> KeyType;
 
-  auto GetEntries() -> MappingType *;
+  inline auto GetEntries() -> MappingType * { return array_; }
 
  private:
   page_id_t next_page_id_;

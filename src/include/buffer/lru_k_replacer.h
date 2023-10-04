@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <deque>
 #include <limits>
 #include <list>
 #include <mutex>  // NOLINT
@@ -140,7 +141,7 @@ class LRUKReplacer {
   size_t replacer_size_;
   size_t k_;
   std::mutex latch_;
-  std::vector<std::list<size_t>> access_records_;
+  std::vector<std::deque<size_t>> access_records_;
   std::vector<bool> evictable_frames_;
 
   void RemoveInternal(frame_id_t frame_id);

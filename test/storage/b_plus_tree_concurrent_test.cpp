@@ -101,7 +101,7 @@ void DeleteHelperSplit(BPlusTree<GenericKey<8>, RID, GenericComparator<8>> *tree
   delete transaction;
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_InsertTest1) {
+TEST(BPlusTreeConcurrentTest, InsertTest1) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -171,37 +171,37 @@ TEST(BPlusTreeConcurrentTest, InsertTest2) {
   (void)header_page;
   // keys to Insert
   std::vector<int64_t> keys;
-  int64_t scale_factor = 100000;
+  int64_t scale_factor = 1000;
   for (int64_t key = 1; key < scale_factor; key++) {
     keys.push_back(key);
   }
   LaunchParallelTest(5, InsertHelperSplit, &tree, keys, 5);
 
-  tree.Draw(bpm, "./test1.dot");
+  // tree.Draw(bpm, "./test1.dot");
 
-  // std::vector<RID> rids;
-  // GenericKey<8> index_key;
-  // for (auto key : keys) {
-  //   rids.clear();
-  //   index_key.SetFromInteger(key);
-  //   tree.GetValue(index_key, &rids);
-  //   EXPECT_EQ(rids.size(), 1);
+  std::vector<RID> rids;
+  GenericKey<8> index_key;
+  for (auto key : keys) {
+    rids.clear();
+    index_key.SetFromInteger(key);
+    tree.GetValue(index_key, &rids);
+    EXPECT_EQ(rids.size(), 1);
 
-  //   int64_t value = key & 0xFFFFFFFF;
-  //   EXPECT_EQ(rids[0].GetSlotNum(), value);
-  // }
+    int64_t value = key & 0xFFFFFFFF;
+    EXPECT_EQ(rids[0].GetSlotNum(), value);
+  }
 
-  // int64_t start_key = 1;
-  // int64_t current_key = start_key;
-  // index_key.SetFromInteger(start_key);
-  // for (auto iterator = tree.Begin(index_key); iterator != tree.End(); ++iterator) {
-  //   auto location = (*iterator).second;
-  //   EXPECT_EQ(location.GetPageId(), 0);
-  //   EXPECT_EQ(location.GetSlotNum(), current_key);
-  //   current_key = current_key + 1;
-  // }
+  int64_t start_key = 1;
+  int64_t current_key = start_key;
+  index_key.SetFromInteger(start_key);
+  for (auto iterator = tree.Begin(index_key); iterator != tree.End(); ++iterator) {
+    auto location = (*iterator).second;
+    EXPECT_EQ(location.GetPageId(), 0);
+    EXPECT_EQ(location.GetSlotNum(), current_key);
+    current_key = current_key + 1;
+  }
 
-  // EXPECT_EQ(current_key, keys.size() + 1);
+  EXPECT_EQ(current_key, keys.size() + 1);
 
   bpm->UnpinPage(HEADER_PAGE_ID, true);
   delete disk_manager;
@@ -210,7 +210,7 @@ TEST(BPlusTreeConcurrentTest, InsertTest2) {
   remove("test.log");
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest1) {
+TEST(BPlusTreeConcurrentTest, DeleteTest1) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -252,7 +252,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest1) {
   remove("test.log");
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest2) {
+TEST(BPlusTreeConcurrentTest, DeleteTest2) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());
@@ -299,7 +299,7 @@ TEST(BPlusTreeConcurrentTest, DISABLED_DeleteTest2) {
   remove("test.log");
 }
 
-TEST(BPlusTreeConcurrentTest, DISABLED_MixTest) {
+TEST(BPlusTreeConcurrentTest, MixTest) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<8> comparator(key_schema.get());

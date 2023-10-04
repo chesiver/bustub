@@ -42,7 +42,7 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   void SetKeyAt(int index, const KeyType &key);
   auto ValueAt(int index) const -> ValueType;
 
-  auto GetEntries() -> MappingType *;
+  inline auto GetEntries() -> MappingType * { return array_; }
 
  private:
   // Flexible array member for page data.
