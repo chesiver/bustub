@@ -8,40 +8,9 @@
 
 namespace bustub {
 
-INDEX_TEMPLATE_ARGUMENTS
-BPLUSTREE_TYPE::BPlusTree(std::string name, BufferPoolManager *buffer_pool_manager, const KeyComparator &comparator,
-                          int leaf_max_size, int internal_max_size)
-    : index_name_(std::move(name)),
-      root_page_id_(INVALID_PAGE_ID),
-      buffer_pool_manager_(buffer_pool_manager),
-      comparator_(comparator),
-      leaf_max_size_(leaf_max_size),
-      internal_max_size_(internal_max_size) {}
+/* Utility */
 
-/*
- * Helper function to decide whether current b+tree is empty
- */
-INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return root_page_id_ == INVALID_PAGE_ID; }
-/*****************************************************************************
- * SEARCH
- *****************************************************************************/
-INDEX_TEMPLATE_ARGUMENTS
-auto FindEntriesWithKeyLargerThan(int size, MappingType *entries, const KeyType &key, KeyComparator comparator) -> int {
-  int p = 0;
-  int q = size;
-  while (p < q) {
-    int mid = (p + q) / 2;
-    if (comparator(entries[mid].first, key) <= 0) {
-      p = mid + 1;
-    } else {
-      q = mid;
-    }
-  }
-  return p;
-}
-
-auto GetPageFromTransactionPageSet(page_id_t page_id, Transaction *transaction) -> Page * {
+inline auto GetPageFromTransactionPageSet(page_id_t page_id, Transaction *transaction) -> Page * {
   auto pages = transaction->GetPageSet();
   for (auto it = pages->rbegin(); it != pages->rend(); ++it) {
     Page *page = *it;
@@ -52,8 +21,7 @@ auto GetPageFromTransactionPageSet(page_id_t page_id, Transaction *transaction) 
   return nullptr;
 }
 
-INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsSafeEntries(BPlusTreePage *tree_page, Operation op) -> bool {
+inline auto IsSafeEntries(BPlusTreePage *tree_page, Operation op) -> bool {
   if (op == Operation::Insert) {
     if (tree_page->IsLeafPage()) {
       return tree_page->GetSize() < tree_page->GetMaxSize() - 1;
@@ -72,29 +40,62 @@ auto BPLUSTREE_TYPE::IsSafeEntries(BPlusTreePage *tree_page, Operation op) -> bo
   return false;
 }
 
-INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::CreatePageWithSpin(page_id_t *page_id) -> Page * {
+inline auto CreatePageWithSpin(BufferPoolManager *buffer_pool_manager, page_id_t *page_id) -> Page * {
   Page *page;
-  while ((page = buffer_pool_manager_->NewPage(page_id)) == nullptr) {
+  while ((page = buffer_pool_manager->NewPage(page_id)) == nullptr) {
     // MY_LOG_DEBUG("All frames are pinned when create new page. Spin....");
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
   }
   return page;
 }
 
-INDEX_TEMPLATE_ARGUMENTS
-void BPLUSTREE_TYPE::ReleasePage(Page *page, bool dirty_flag) {
+inline void ReleasePage(BufferPoolManager *buffer_pool_manager, Page *page, bool dirty_flag) {
   page_id_t page_id = page->GetPageId();
   if (dirty_flag) {
     // MY_LOG_DEBUG("write: page id: {} --- page pin count: {}", page->GetPageId(), page->GetPinCount());
     page->WUnlatch();
-    buffer_pool_manager_->UnpinPage(page_id, true);
+    buffer_pool_manager->UnpinPage(page_id, true);
   } else {
     // MY_LOG_DEBUG("read: page id: {} --- page pin count: {}", page->GetPageId(), page->GetPinCount());
     page->RUnlatch();
-    buffer_pool_manager_->UnpinPage(page_id, false);
+    buffer_pool_manager->UnpinPage(page_id, false);
   }
 }
+
+INDEX_TEMPLATE_ARGUMENTS
+inline auto FindEntriesWithKeyLargerThan(int size, MappingType *entries, const KeyType &key, KeyComparator comparator)
+    -> int {
+  int p = 0;
+  int q = size;
+  while (p < q) {
+    int mid = (p + q) / 2;
+    if (comparator(entries[mid].first, key) <= 0) {
+      p = mid + 1;
+    } else {
+      q = mid;
+    }
+  }
+  return p;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+BPLUSTREE_TYPE::BPlusTree(std::string name, BufferPoolManager *buffer_pool_manager, const KeyComparator &comparator,
+                          int leaf_max_size, int internal_max_size)
+    : index_name_(std::move(name)),
+      root_page_id_(INVALID_PAGE_ID),
+      buffer_pool_manager_(buffer_pool_manager),
+      comparator_(comparator),
+      leaf_max_size_(leaf_max_size),
+      internal_max_size_(internal_max_size) {}
+
+/*
+ * Helper function to decide whether current b+tree is empty
+ */
+INDEX_TEMPLATE_ARGUMENTS
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return root_page_id_ == INVALID_PAGE_ID; }
+/*****************************************************************************
+ * SEARCH
+ *****************************************************************************/
 
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::ReleaseWLatches(Transaction *transaction) {
@@ -106,7 +107,7 @@ void BPLUSTREE_TYPE::ReleaseWLatches(Transaction *transaction) {
       // MY_LOG_DEBUG("Released root latch");
       root_latch_.WUnlock();
     } else {
-      ReleasePage(page, true);
+      ReleasePage(buffer_pool_manager_, page, true);
     }
   }
 }
@@ -136,7 +137,7 @@ auto BPLUSTREE_TYPE::DownToLeafForRead(const KeyType &key, Transaction *transact
     next_page->RLatch();
     // MY_LOG_DEBUG("Obtain read latch for page id: {} - key: {}", next_page->GetPageId(), key.ToString());
     /* Unpin */
-    ReleasePage(cur_page, false);
+    ReleasePage(buffer_pool_manager_, cur_page, false);
     cur_page = next_page;
     cur_tree_page = reinterpret_cast<BPlusTreePage *>(cur_page->GetData());
   }
@@ -179,7 +180,7 @@ auto BPLUSTREE_TYPE::OptimisticDownToLeafForWrite(const KeyType &key, Transactio
       next_page->RLatch();
     }
     /* Unpin */
-    ReleasePage(cur_page, false);
+    ReleasePage(buffer_pool_manager_, cur_page, false);
     cur_page = next_page;
     cur_tree_page = next_tree_page;
   }
@@ -267,7 +268,7 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
   if (leaf_tree_page->IsRootPage()) {
     root_latch_.RUnlock();
   }
-  ReleasePage(leaf_page, false);
+  ReleasePage(buffer_pool_manager_, leaf_page, false);
   // MY_LOG_DEBUG("Finish {}", key.ToString());
   return found;
 }
@@ -299,11 +300,13 @@ void SplitEntries(int size, MappingType *left, MappingType *right, const Mapping
 
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::InsertOnLeaf(LeafPage *leaf, const KeyType &key, const ValueType &value) {
-  int p = FindEntriesWithKeyLargerThan(leaf->GetSize(), leaf->GetEntries(), key, comparator_);
-  for (int i = leaf->GetSize() - 1; i >= p; i -= 1) {
-    leaf->GetEntries()[i + 1] = leaf->GetEntries()[i];
+  MappingType *entries = leaf->GetEntries();
+  int i = leaf->GetSize();
+  while (i > 0 && comparator_(entries[i - 1].first, key) > 0) {
+    entries[i] = entries[i - 1];
+    i -= 1;
   }
-  leaf->GetEntries()[p] = std::make_pair(key, value);
+  entries[i] = std::make_pair(key, value);
   leaf->IncreaseSize(1);
 }
 
@@ -317,7 +320,7 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
   if (left_tree_page->IsRootPage()) {
     /* Create root page */
     page_id_t new_root_page_id;
-    Page *root_page = CreatePageWithSpin(&new_root_page_id);
+    Page *root_page = CreatePageWithSpin(buffer_pool_manager_, &new_root_page_id);
     // MY_LOG_DEBUG("Create root page id: {} - key: {}", new_root_page_id, key.ToString());
     BUSTUB_ASSERT(root_page != nullptr, "Fail to create root page - Check if all pages are pinned");
     /* Create B+ tree page */
@@ -356,7 +359,7 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
   /* Split */
   /* Create right page */
   page_id_t next_to_parent_page_id;
-  Page *next_to_parent_page = CreatePageWithSpin(&next_to_parent_page_id);
+  Page *next_to_parent_page = CreatePageWithSpin(buffer_pool_manager_, &next_to_parent_page_id);
   // MY_LOG_DEBUG("Create next to current page id: {} - key: {}", next_to_parent_page_id, key.ToString());
   BUSTUB_ASSERT(next_to_parent_page != nullptr, "Fail to create new right page - Check if all pages are pinned");
   /* Lock right page */
@@ -382,7 +385,7 @@ void BPLUSTREE_TYPE::InsertOnParent(Page *left_page, const KeyType &key, Page *r
   /* Recursive */
   InsertOnParent(parent_page, parent_split_key, next_to_parent_page, transaction);
   /* Release */
-  ReleasePage(next_to_parent_page, true);
+  ReleasePage(buffer_pool_manager_, next_to_parent_page, true);
   // MY_LOG_DEBUG("Finish split for insert: {}", key.ToString());
 }
 
@@ -407,7 +410,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
     // MY_LOG_DEBUG("Obtain root write latch - key: {}", key.ToString());
     transaction->AddIntoPageSet(nullptr);
     if (IsEmpty()) {
-      cur_page = CreatePageWithSpin(&root_page_id_);
+      cur_page = CreatePageWithSpin(buffer_pool_manager_, &root_page_id_);
       BUSTUB_ASSERT(cur_page != nullptr, "Fail to create new Page - Check if all pages are pinned");
       // MY_LOG_DEBUG("Creat root page when empty - key: {} - root page id: {}", key.ToString(), root_page_id_);
       cur_page->WLatch();
@@ -449,7 +452,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   /* Split */
   /* Create right page */
   page_id_t next_to_cur_page_id;
-  Page *next_to_cur_page = CreatePageWithSpin(&next_to_cur_page_id);
+  Page *next_to_cur_page = CreatePageWithSpin(buffer_pool_manager_, &next_to_cur_page_id);
   BUSTUB_ASSERT(next_to_cur_page != nullptr, "Fail to create new Page - Check if all pages are pinned");
   // MY_LOG_DEBUG("Create next to current page id: {}", next_to_cur_page_id);
   /* Lock right page */
@@ -470,7 +473,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   /* Recursive */
   InsertOnParent(cur_page, parent_split_key, next_to_cur_page, transaction);
   /* Release */
-  ReleasePage(next_to_cur_page, true);
+  ReleasePage(buffer_pool_manager_, next_to_cur_page, true);
   ReleaseWLatches(transaction);
   // MY_LOG_DEBUG("Finish Split for insert: {}", key.ToString());
   return true;
@@ -572,7 +575,7 @@ void BPLUSTREE_TYPE::RemoveLeafEntry(Page *cur_page, const KeyType &key, Transac
       // MY_LOG_DEBUG("Add deleted page id: {} to deleted set", cur_page->GetPageId());
       transaction->AddIntoDeletedPageSet(cur_page->GetPageId());
       /* Release not transaction latched page */
-      ReleasePage(not_transaction_latched_page, true);
+      ReleasePage(buffer_pool_manager_, not_transaction_latched_page, true);
     } else {
       /* Redistribution */
       if (isPredecessor) {
@@ -599,7 +602,7 @@ void BPLUSTREE_TYPE::RemoveLeafEntry(Page *cur_page, const KeyType &key, Transac
         parent_tree_page->GetEntries()[siblingIdxInParent].first = sibling_tree_page->GetEntries()[0].first;
       }
       /* Unpin sibling */
-      ReleasePage(sibling_page, true);
+      ReleasePage(buffer_pool_manager_, sibling_page, true);
     }
     return;
   }
@@ -678,7 +681,7 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(Page *cur_page, const KeyType &key, Tra
       transaction->AddIntoDeletedPageSet(cur_page->GetPageId());
       // MY_LOG_DEBUG("Merge end - key: {} - deleted_page_id: {}", key.ToString(), cur_page->GetPageId());
       /* Release not transaction latched page */
-      ReleasePage(not_transaction_latched_page, true);
+      ReleasePage(buffer_pool_manager_, not_transaction_latched_page, true);
     } else {
       /* Redistribution */
       if (isPredecessor) {
@@ -720,7 +723,7 @@ void BPLUSTREE_TYPE::RemoveInternalEntry(Page *cur_page, const KeyType &key, Tra
         parent_tree_page->GetEntries()[siblingIdxInParent].first = sibling_tree_page->GetEntries()[0].first;
       }
       /* Unpin sibling */
-      ReleasePage(sibling_page, true);
+      ReleasePage(buffer_pool_manager_, sibling_page, true);
     }
     // MY_LOG_DEBUG("Redistribution end - key: {}", key.ToString());
     return;

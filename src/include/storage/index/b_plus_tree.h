@@ -55,9 +55,6 @@ class BPlusTree {
   // Returns true if this B+ tree has no keys and values.
   auto IsEmpty() const -> bool;
 
-  auto IsSafeEntries(BPlusTreePage *tree_page, Operation op) -> bool;
-  auto CreatePageWithSpin(page_id_t *page_id) -> Page *;
-  void ReleasePage(Page *page, bool dirty_flag);
   void ReleaseWLatches(Transaction *transaction);
 
   // Insert a key-value pair into this B+ tree.
