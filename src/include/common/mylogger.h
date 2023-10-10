@@ -3,6 +3,8 @@
 #include <fmt/chrono.h>
 #include <fmt/color.h>
 #include <fmt/std.h>
+#include <unordered_map>
+#include <vector>
 
 #include <cstdio>
 

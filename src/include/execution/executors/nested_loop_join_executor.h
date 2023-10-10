@@ -12,7 +12,9 @@
 
 #pragma once
 
+#include <map>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "execution/executor_context.h"
@@ -55,6 +57,18 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
  private:
   /** The NestedLoopJoin plan node to be executed. */
   const NestedLoopJoinPlanNode *plan_;
+
+  std::unique_ptr<AbstractExecutor> left_executor_;
+
+  std::unique_ptr<AbstractExecutor> right_executor_;
+
+  std::map<std::string, int> left_col_idx_map_;
+
+  std::map<std::string, int> right_col_idx_map_;
+
+  Tuple left_tuple_;
+
+  bool left_matched_;
 };
 
 }  // namespace bustub
