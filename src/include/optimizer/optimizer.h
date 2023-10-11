@@ -51,6 +51,12 @@ class Optimizer {
   auto OptimizeNLJAsHashJoin(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
 
   /**
+   * Optimize hash join's order
+  */
+
+  auto OptimizesHashJoinOrder(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
+
+  /**
    * @brief optimize nested loop join into index join.
    */
   auto OptimizeNLJAsIndexJoin(const AbstractPlanNodeRef &plan) -> AbstractPlanNodeRef;
