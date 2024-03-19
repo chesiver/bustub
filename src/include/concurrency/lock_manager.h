@@ -298,6 +298,10 @@ class LockManager {
   auto RunCycleDetection() -> void;
 
  private:
+
+  /* Custom Utility */
+  auto UpgradeTableLockIfCompatible(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> bool;
+
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
   std::unordered_map<table_oid_t, std::shared_ptr<LockRequestQueue>> table_lock_map_;
