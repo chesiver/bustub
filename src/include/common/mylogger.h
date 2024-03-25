@@ -12,16 +12,12 @@ namespace bustub {
 
 class ThreadMap {
  public:
-  void AddThreadId(std::thread::id thread_id) {
-    m_.lock();
-    thread_map_[thread_id] = count_++;
-    m_.unlock();
-  }
   auto GetMappedThreadId(std::thread::id thread_id) -> int {
-    m_.lock();
-    int id = thread_map_[thread_id];
-    m_.unlock();
-    return id;
+    std::scoped_lock lock{m_};
+    if (thread_map_.find(thread_id) == thread_map_.end()) {
+      thread_map_[thread_id] = count_++;
+    }
+    return thread_map_[thread_id];
   }
 
  private:
@@ -50,10 +46,9 @@ inline void OutputLogHeaderV2(fmt::memory_buffer &out, const char *file, int lin
   std::time_t now = std::time(nullptr);
   std::thread::id thread_id = std::this_thread::get_id();
   int id = global_thread_map.GetMappedThreadId(thread_id);
-  // size_t id = std::hash<std::thread::id>()(thread_id);
   std::vector<fmt::color> colors = {fmt::color::purple,     fmt::color::yellow,     fmt::color::red,
                                     fmt::color::blue,       fmt::color::green,      fmt::color::magenta,
-                                    fmt::color::light_blue, fmt::color::light_green};
+                                    fmt::color::light_blue, fmt::color::light_green, fmt::color::aqua};
   fmt::color c = colors[id % colors.size()];
   fmt::format_to(std::back_inserter(out), fg(c), "id: {} - {:%H:%M:%S} [{}:{}] - ", id, fmt::localtime(now), line,
                  func);

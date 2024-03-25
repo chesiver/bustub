@@ -26,6 +26,8 @@
 #include "common/rid.h"
 #include "concurrency/transaction.h"
 
+#include "common/mylogger.h"
+
 namespace bustub {
 
 class TransactionManager;
@@ -64,7 +66,7 @@ class LockManager {
   class LockRequestQueue {
    public:
     /** List of lock requests for the same resource (table or row) */
-    std::list<LockRequest *> request_queue_;
+    std::list<std::shared_ptr<LockRequest>> request_queue_;
     /** For notifying blocked transactions on this rid */
     std::condition_variable cv_;
     /** txn_id of an upgrading transaction (if any) */
@@ -298,9 +300,47 @@ class LockManager {
   auto RunCycleDetection() -> void;
 
  private:
+  auto FindLockRequest(const txn_id_t &txn_id, const table_oid_t &oid) -> std::shared_ptr<LockRequest> {
+    std::shared_ptr<LockRequestQueue> lock_request_queue = table_lock_map_[oid];
+    MY_LOG_DEBUG("Test in FindLockRequest 1 --- {}", lock_request_queue == nullptr);
+    if (lock_request_queue == nullptr) {
+      return nullptr;
+    }
+    for (auto lock_req : lock_request_queue->request_queue_) {
+      MY_LOG_DEBUG("Test in FindLockRequest 2 --- {} {} --- {} {}", lock_req->txn_id_, txn_id, lock_req->oid_, oid);
+      if (lock_req->txn_id_ == txn_id && lock_req->oid_ == oid) {
+        return lock_req;
+      }
+    }
+    return nullptr;
+  }
 
-  /* Custom Utility */
-  auto UpgradeTableLockIfCompatible(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> bool;
+  auto FindLockRequest(const txn_id_t &txn_id, const table_oid_t &oid, const RID &rid) -> std::shared_ptr<LockRequest> {
+    std::shared_ptr<LockRequestQueue> lock_request_queue = table_lock_map_[oid];
+    if (lock_request_queue == nullptr) {
+      return nullptr;
+    }
+    for (auto lock_req : lock_request_queue->request_queue_) {
+      if (lock_req->txn_id_ == txn_id && lock_req->oid_ == oid && lock_req->rid_ == rid) {
+        return lock_req;
+      }
+    }
+    return nullptr;
+  }
+
+  auto UpgradeFromCurrentLockIfPossible(Transaction *txn, LockMode lock_mode, const table_oid_t &oid,
+                                        int &current_status) -> void;
+
+  auto ProcessLockTable(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> void;
+
+  auto ProcessUnlockTable(Transaction *txn, const table_oid_t &oid) -> void;
+
+  auto UpgradeRowLockIfPossible(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid,
+                                int &current_status) -> void;
+
+  auto ProcessLockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> void;
+
+  auto ProcessUnlockRow(Transaction *txn, const table_oid_t &oid, const RID &rid) -> void;
 
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
