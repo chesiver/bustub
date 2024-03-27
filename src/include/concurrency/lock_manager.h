@@ -300,34 +300,6 @@ class LockManager {
   auto RunCycleDetection() -> void;
 
  private:
-  auto FindLockRequest(const txn_id_t &txn_id, const table_oid_t &oid) -> std::shared_ptr<LockRequest> {
-    std::shared_ptr<LockRequestQueue> lock_request_queue = table_lock_map_[oid];
-    MY_LOG_DEBUG("Test in FindLockRequest 1 --- {}", lock_request_queue == nullptr);
-    if (lock_request_queue == nullptr) {
-      return nullptr;
-    }
-    for (auto lock_req : lock_request_queue->request_queue_) {
-      MY_LOG_DEBUG("Test in FindLockRequest 2 --- {} {} --- {} {}", lock_req->txn_id_, txn_id, lock_req->oid_, oid);
-      if (lock_req->txn_id_ == txn_id && lock_req->oid_ == oid) {
-        return lock_req;
-      }
-    }
-    return nullptr;
-  }
-
-  auto FindLockRequest(const txn_id_t &txn_id, const table_oid_t &oid, const RID &rid) -> std::shared_ptr<LockRequest> {
-    std::shared_ptr<LockRequestQueue> lock_request_queue = table_lock_map_[oid];
-    if (lock_request_queue == nullptr) {
-      return nullptr;
-    }
-    for (auto lock_req : lock_request_queue->request_queue_) {
-      if (lock_req->txn_id_ == txn_id && lock_req->oid_ == oid && lock_req->rid_ == rid) {
-        return lock_req;
-      }
-    }
-    return nullptr;
-  }
-
   auto UpgradeFromCurrentLockIfPossible(Transaction *txn, LockMode lock_mode, const table_oid_t &oid,
                                         int &current_status) -> void;
 
