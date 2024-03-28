@@ -314,6 +314,8 @@ class LockManager {
 
   auto ProcessUnlockRow(Transaction *txn, const table_oid_t &oid, const RID &rid) -> void;
 
+  auto NotifyLockRequestQueueForAbortedTransaction(Transaction *txn) -> void;
+
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
   std::unordered_map<table_oid_t, std::shared_ptr<LockRequestQueue>> table_lock_map_;
