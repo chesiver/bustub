@@ -178,6 +178,7 @@ auto FilterLockRequestsIfTransanctionAborted(
   std::list<std::shared_ptr<LockRequest>> &queue, 
   std::unordered_map<txn_id_t, std::vector<txn_id_t>> &adj_list
 ) -> void {
+  /* Need remove waits_for edge here */
   for (const auto &item: queue) {
     txn_id_t txn_id = item->txn_id_;
     Transaction *txn = TransactionManager::GetTransaction(txn_id);
