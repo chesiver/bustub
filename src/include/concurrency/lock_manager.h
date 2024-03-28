@@ -303,14 +303,14 @@ class LockManager {
   auto UpgradeFromCurrentLockIfPossible(Transaction *txn, LockMode lock_mode, const table_oid_t &oid,
                                         int &current_status) -> void;
 
-  auto ProcessLockTable(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> void;
+  auto ProcessLockTable(Transaction *txn, LockMode lock_mode, const table_oid_t &oid) -> bool;
 
   auto ProcessUnlockTable(Transaction *txn, const table_oid_t &oid) -> void;
 
   auto UpgradeRowLockIfPossible(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid,
                                 int &current_status) -> void;
 
-  auto ProcessLockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> void;
+  auto ProcessLockRow(Transaction *txn, LockMode lock_mode, const table_oid_t &oid, const RID &rid) -> bool;
 
   auto ProcessUnlockRow(Transaction *txn, const table_oid_t &oid, const RID &rid) -> void;
 

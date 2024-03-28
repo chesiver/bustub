@@ -108,16 +108,16 @@ TEST(LockManagerDeadlockDetectionTest, BasicDeadlockDetectionTest) {
     EXPECT_EQ(res, true);
 
     res = lock_mgr.LockRow(txn1, LockManager::LockMode::EXCLUSIVE, toid, rid1);
-    // EXPECT_EQ(TransactionState::GROWING, txn1->GetState());
+    EXPECT_EQ(TransactionState::GROWING, txn1->GetState());
 
-    // MY_LOG_DEBUG("T1 Test 1");
-    // // This will block
-    // res = lock_mgr.LockRow(txn1, LockManager::LockMode::EXCLUSIVE, toid, rid0);
-    // EXPECT_EQ(res, false);
-    // MY_LOG_DEBUG("T1 Test 2");
+    MY_LOG_DEBUG("T1 Test 1");
+    // This will block
+    res = lock_mgr.LockRow(txn1, LockManager::LockMode::EXCLUSIVE, toid, rid0);
+    EXPECT_EQ(res, false);
+    MY_LOG_DEBUG("T1 Test 2");
 
-    // EXPECT_EQ(TransactionState::ABORTED, txn1->GetState());
-    // txn_mgr.Abort(txn1);
+    EXPECT_EQ(TransactionState::ABORTED, txn1->GetState());
+    txn_mgr.Abort(txn1);
   });
 
   // Sleep for enough time to break cycle
