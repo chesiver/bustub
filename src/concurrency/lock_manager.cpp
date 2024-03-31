@@ -50,7 +50,6 @@ auto PrintTableLockSet(const std::unordered_set<table_oid_t> &table_lock_set) ->
   for (auto &oid : table_lock_set) {
     ss << fmt::format("oid: {}", oid) << ",";
   }
-  ss << "\n";
   // MY_LOG_DEBUG("{}", ss.str());
 }
 /* ------- End of Debug ------ */
@@ -250,7 +249,7 @@ auto GrantLocksForLockRequestQueue(
   if (has_lock_granted) {
     lock_request_queue->cv_.notify_all();
   }
-  PrintEdgeList(lock_manager->GetEdgeList());
+  // PrintEdgeList(lock_manager->GetEdgeList());
 }
 
 auto CheckIfTransactionHoldsTableLock(Transaction *txn, const table_oid_t &oid, bool &is_locked, LockMode &lock_mode)
@@ -757,6 +756,7 @@ auto LockManager::LockRow(Transaction *txn, LockMode lock_mode, const table_oid_
 }
 
 auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID &rid) -> bool {
+  // MY_LOG_DEBUG("Start of UnlockRow --- txn_id: {}, oid: {}, rid: {}", txn->GetTransactionId(), oid, rid.ToString());
   if (TransactionState::ABORTED == txn->GetState() || TransactionState::COMMITTED == txn->GetState()) {
     if (txn->GetSharedRowLockSet()->count(oid) > 0) {
       txn->GetSharedRowLockSet()->erase(oid);
@@ -771,6 +771,7 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
   bool is_currently_locked;
   LockMode current_lock_mode;
   CheckIfTransactionHoldsRowLock(txn, oid, rid, is_currently_locked, current_lock_mode);
+  // MY_LOG_DEBUG("In UnlockRow --- is_currently_locked: {}, current_lock_mode: {}", is_currently_locked, (int)current_lock_mode);
   if (current_lock_mode == LockMode::SHARED) {
     /* Undefined behavior */
     if (txn->GetIsolationLevel() == IsolationLevel::READ_UNCOMMITTED) {
@@ -794,6 +795,7 @@ auto LockManager::UnlockRow(Transaction *txn, const table_oid_t &oid, const RID 
     throw TransactionAbortException(txn->GetTransactionId(), AbortReason::ATTEMPTED_UNLOCK_BUT_NO_LOCK_HELD);
   }
   ProcessUnlockRow(txn, oid, rid);
+  // MY_LOG_DEBUG("End of UnlockRow --- txn_id: {}, oid: {}, rid: {}", txn->GetTransactionId(), oid, rid.ToString());
   return true;
 }
 
@@ -852,8 +854,9 @@ auto LockManager::GetEdgeList() -> std::vector<std::pair<txn_id_t, txn_id_t>> {
   return edges;
 }
 
-auto LockManager::NotifyLockRequestQueueForAbortedTransaction(Transaction *txn) -> void {
+auto LockManager::AbortTransactionAndNotifyLockRequestQueue(Transaction *txn) -> void {
   txn->LockTxn();
+  txn->SetState(TransactionState::ABORTED);
   std::unordered_set<RID> row_lock_set;
   for (const auto &s_row_lock_set : *txn->GetSharedRowLockSet()) {
     for (auto rid : s_row_lock_set.second) {
@@ -901,6 +904,7 @@ auto LockManager::NotifyLockRequestQueueForAbortedTransaction(Transaction *txn) 
       lock_request_queue->cv_.notify_all();
     }
   }
+  // MY_LOG_DEBUG("End of AbortTransactionAndNotifyLockRequestQueue");
 }
 
 void LockManager::RunCycleDetection() {
@@ -913,9 +917,7 @@ void LockManager::RunCycleDetection() {
         // MY_LOG_DEBUG("Has cycle --- txn_id: {}", txn_id);
         /* Need break cycle */
         Transaction *txn = TransactionManager::GetTransaction(txn_id);
-        // MY_LOG_DEBUG("Test !!!!!: txn is null: {}", txn == nullptr);
-        txn->SetState(TransactionState::ABORTED);
-        NotifyLockRequestQueueForAbortedTransaction(txn);
+        AbortTransactionAndNotifyLockRequestQueue(txn);
       }
     }
   }
